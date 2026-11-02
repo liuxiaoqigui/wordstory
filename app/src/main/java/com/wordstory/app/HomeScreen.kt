@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class Stats(val learned: Set<String>, val due: Int, val mastered: Int, val xpToday: Int, val streak: Int)
@@ -94,7 +95,7 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
             0 -> {
                 val list = lessons
                 if (s == null || list == null) LoadingBox(pad)
-                else LessonsTab(list, s.learned, st.lessonList, pad) { open(Screen.Lesson(it)) }
+                else LessonsTab(list, s.learned, st, pad) { open(Screen.Lesson(it)) }
             }
             1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, pad) { open(Screen.Review) }
             else -> SearchTab(r.words, st, pad) { open(Screen.Detail(it)) }
@@ -226,9 +227,10 @@ private data class LessonRow(
 
 @Composable
 private fun LessonsTab(
-    lessons: List<LessonInfo>, learned: Set<String>, listState: LazyListState, pad: PaddingValues,
+    lessons: List<LessonInfo>, learned: Set<String>, st: HomeState, pad: PaddingValues,
     onOpen: (LessonInfo) -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     // 每个等级的第一关直接开放，之后要先学完上一关
     val rows = remember(lessons, learned) {
         var number = 0
@@ -256,15 +258,17 @@ private fun LessonsTab(
         }
         built
     }
-    val next = rows.firstOrNull { !it.done && it.unlocked }
-    if (rows.isEmpty()) {
+    // 只显示当前选的难度；关卡编号和解锁本来就按难度各自计算
+    val shown = rows.filter { it.info.level == st.level }
+    val next = shown.firstOrNull { !it.done && it.unlocked }
+    if (shown.isEmpty()) {
         Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("词库是空的", fontWeight = FontWeight.ExtraBold, color = DuoWolf)
         }
         return
     }
     LazyColumn(
-        state = listState,
+        state = st.lessonList,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp, end = 16.dp,
@@ -272,17 +276,19 @@ private fun LessonsTab(
             bottom = pad.calculateBottomPadding() + 24.dp,
         ),
     ) {
+        item(key = "levels") {
+            LevelChips(st.level) {
+                st.selectLevel(it)
+                scope.launch { st.lessonList.scrollToItem(0) }
+            }
+        }
         item(key = "next") {
             if (next != null) ContinueCard(next) { onOpen(next.info) }
             else DoneCard()
         }
-        rows.forEach { row ->
+        shown.forEach { row ->
             if (row.number == 1) item(key = "level${row.info.level}") {
-                LevelBanner(
-                    row.info.level,
-                    total = rows.count { it.info.level == row.info.level },
-                    done = rows.count { it.info.level == row.info.level && it.done },
-                )
+                LevelBanner(row.info.level, total = shown.size, done = shown.count { it.done })
             }
             item(key = row.info.lesson) {
                 val currentId = next?.info?.lesson
@@ -338,8 +344,56 @@ private fun DoneCard() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("🎉", fontSize = 36.sp)
-        Text("全部学完了", fontWeight = FontWeight.Black, fontSize = 22.sp, color = DuoEel)
-        Text("去复习巩固一下", fontWeight = FontWeight.Bold, color = DuoWolf, modifier = Modifier.padding(top = 4.dp))
+        Text("这个难度全部学完了", fontWeight = FontWeight.Black, fontSize = 22.sp, color = DuoEel)
+        Text("换个难度，或者去复习巩固一下", fontWeight = FontWeight.Bold, color = DuoWolf, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** 学习页顶部的难度切换 */
+@Composable
+private fun LevelChips(selected: Int, onSelect: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        LEVEL_NAMES.forEach { (level, name) ->
+            val on = level == selected
+            val palette = levelPalette(level)
+            Text(
+                name,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) palette.face else DuoWhite)
+                    .border(2.dp, if (on) palette.lip else DuoSwan, RoundedCornerShape(12.dp))
+                    .clickable { onSelect(level) }
+                    .padding(vertical = 8.dp),
+                color = if (on) DuoWhite else DuoWolf,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** 第一次打开时选从哪个难度开始，之后在学习页顶部随时能换 */
+@Composable
+fun LevelPicker(r: Repo, onPick: (Int) -> Unit) {
+    val counts by produceState(emptyMap<Int, Int>()) {
+        value = withContext(Dispatchers.IO) { r.lessons.groupBy { it.level }.mapValues { (_, l) -> l.sumOf { it.words.size } } }
+    }
+    Column(
+        Modifier.fillMaxSize().background(DuoWhite).statusBarsPadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("🦉", fontSize = 56.sp, modifier = Modifier.padding(top = 24.dp))
+        Text("从哪里开始？", fontWeight = FontWeight.Black, fontSize = 30.sp, color = DuoEel)
+        Text("选一个适合你的难度，之后在学习页顶部随时可以切换。", fontWeight = FontWeight.Bold, color = DuoWolf,
+            fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.padding(bottom = 8.dp))
+        LEVEL_NAMES.forEach { (level, name) ->
+            val palette = levelPalette(level)
+            val count = counts[level]?.let { " · $it 词" } ?: ""
+            DuoButton("$name　${LEVEL_HINTS[level]}$count", onClick = { onPick(level) }, face = palette.face, lip = palette.lip)
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package com.wordstory.app
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -43,6 +44,7 @@ class Repo(context: Context) {
     val words = WordDb(context)
     val user = UserDb(context)
     val lessons by lazy { words.lessons() }
+    val prefs: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 }
 
 sealed interface Screen {
@@ -53,10 +55,17 @@ sealed interface Screen {
 }
 
 /** 首页的状态放在外面，从详情页返回时标签页、搜索词、列表位置都还在 */
-class HomeState {
+class HomeState(private val prefs: SharedPreferences) {
     var tab by mutableIntStateOf(0)
     var query by mutableStateOf("")
     val lessonList = LazyListState()
+    /** 正在学的难度；0 = 还没选过，首次打开时让用户选 */
+    var level by mutableIntStateOf(prefs.getInt("level", 0)); private set
+
+    fun selectLevel(value: Int) {
+        level = value
+        prefs.edit().putInt("level", value).apply()
+    }
 }
 
 @Composable
@@ -72,7 +81,11 @@ fun App() {
         return
     }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
-    val home = remember { HomeState() }
+    val home = remember { HomeState(r.prefs) }
+    if (home.level == 0) {   // 第一次打开：先选从哪个难度开始
+        LevelPicker(r) { home.selectLevel(it) }
+        return
+    }
     var refresh by remember { mutableIntStateOf(0) }   // 学完/复习完回首页时让首页重新读进度
     // removeAt 而不是 removeLast：后者在 Android 14 及以下会因 JDK 21 的同名方法崩溃
     val pop = { stack.removeAt(stack.lastIndex); Unit }

@@ -8,6 +8,7 @@ import java.io.File
 
 // 分级来自 ECDICT 的考试标签：1 中考、2 高考、3 四级、4 六级、5 不在这四类里
 val LEVEL_NAMES = mapOf(1 to "入门", 2 to "简单", 3 to "困难", 4 to "地狱", 5 to "其他")
+val LEVEL_HINTS = mapOf(1 to "中考词汇", 2 to "高考词汇", 3 to "四级词汇", 4 to "六级词汇", 5 to "考试大纲以外的词")
 
 data class Example(val en: String, val zh: String, val blank: String)
 
