@@ -169,7 +169,9 @@ private fun LipBox(
             Modifier.fillMaxSize()
         } else {
             Modifier.fillMaxWidth().heightIn(min = 52.dp)
-        }.padding(start = side, end = side, top = top, bottom = depth).offset(y = shift).background(face)
+        // 正面也要圆角，且比外层小一圈边框宽度：直角会盖住底层圆角，边框在四个角上就断了
+        }.padding(start = side, end = side, top = top, bottom = depth).offset(y = shift)
+            .background(face, RoundedCornerShape(16.dp - side))
         Box(faceMod, contentAlignment = Alignment.Center, content = content)
     }
 }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标前景：一本打开的书，上面一颗闪光。108x108 画布，内容在中间 66x66 安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 整体缩到 80%，圆形和方形图标裁切时都不碰边 -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.8" android:scaleY="0.8">
+        <!-- 书页厚度（多邻国风格的底边） -->
+        <group android:translateY="3.5">
+            <path android:fillColor="#D7D7D7"
+                android:pathData="M53,42 C46,37.5 36,36 27,37.5 L27,73 C36,71.5 46,73 53,77.5 Z" />
+            <path android:fillColor="#D7D7D7"
+                android:pathData="M55,42 C62,37.5 72,36 81,37.5 L81,73 C72,71.5 62,73 55,77.5 Z" />
+        </group>
+        <!-- 左右书页 -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M53,42 C46,37.5 36,36 27,37.5 L27,73 C36,71.5 46,73 53,77.5 Z" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M55,42 C62,37.5 72,36 81,37.5 L81,73 C72,71.5 62,73 55,77.5 Z" />
+        <!-- 书上的文字行 -->
+        <path android:strokeColor="#58CC02" android:strokeWidth="3" android:strokeLineCap="round"
+            android:pathData="M32,47 L48,49 M32,54 L48,56 M32,61 L43,62.5 M76,47 L60,49 M76,54 L60,56 M76,61 L65,62.5" />
+        <!-- 闪光 -->
+        <path android:fillColor="#FFC800"
+            android:pathData="M54,21 Q55.4,28.6 63,30 Q55.4,31.4 54,39 Q52.6,31.4 45,30 Q52.6,28.6 54,21 Z" />
+    </group>
+</vector>
