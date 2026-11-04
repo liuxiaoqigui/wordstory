@@ -44,6 +44,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -261,6 +262,10 @@ private fun LessonsTab(
     // 只显示当前选的难度；关卡编号和解锁本来就按难度各自计算
     val shown = rows.filter { it.info.level == st.level }
     val next = shown.firstOrNull { !it.done && it.unlocked }
+    val speech = LocalWordSpeech.current
+    LaunchedEffect(next?.info?.lesson, speech) {
+        speech?.prefetch(next?.info?.words?.take(3).orEmpty())
+    }
     if (shown.isEmpty()) {
         Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("词库是空的", fontWeight = FontWeight.ExtraBold, color = DuoWolf)

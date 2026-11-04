@@ -87,7 +87,7 @@ private fun Loading(pad: PaddingValues = PaddingValues()) {
 @Composable
 fun WordHeader(w: Word) {
     val name = LEVEL_NAMES[w.level]
-    Text(w.word, fontSize = 40.sp, fontWeight = FontWeight.Black, color = DuoEel, lineHeight = 44.sp)
+    PronounceableWord(w.word)
     Row(
         Modifier.padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -160,6 +160,10 @@ fun LessonScreen(r: Repo, info: LessonInfo, onExit: () -> Unit) {
     var card by remember { mutableIntStateOf(0) }
     var session by remember { mutableStateOf<QuizSession?>(null) }
     var xp by remember { mutableStateOf<Int?>(null) }   // 不为空就是已结算
+    val speech = LocalWordSpeech.current
+    LaunchedEffect(words, card, speech) {
+        speech?.prefetch(words.drop(card).take(3).map { it.word })
+    }
     val scope = rememberCoroutineScope()
     val s = session
     val progress = when {
@@ -247,7 +251,7 @@ private fun QuizView(
             Prompt(if (q is ClozeQuestion) "选词填空" else "选出正确的意思")
             when (q) {
                 is MeaningQuestion -> {
-                    Text(q.word.word, fontSize = 36.sp, fontWeight = FontWeight.Black, color = DuoEel)
+                    PronounceableWord(q.word.word, fontSize = 36.sp, lineHeight = 40.sp)
                     q.word.phonetic?.let {
                         Text("/$it/", color = DuoBlue, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                     }

@@ -30,13 +30,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private lateinit var speech: WordSpeech
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        speech = WordSpeech(applicationContext)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
-        setContent { DuoTheme { App() } }
+        setContent {
+            CompositionLocalProvider(LocalWordSpeech provides speech) {
+                DuoTheme { App() }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        speech.resumePrefetch()
+    }
+
+    override fun onStop() {
+        speech.stop()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        speech.shutdown()
+        super.onDestroy()
     }
 }
 

@@ -104,11 +104,11 @@ fun WordSheet(db: WordDb, token: String, onDismiss: () -> Unit) {
         ) {
             val (hit, word) = data ?: return@Column
             if (hit == null) {
-                Text(token, fontSize = 32.sp, fontWeight = FontWeight.Black, color = DuoEel)
+                PronounceableWord(token, fontSize = 32.sp, lineHeight = 36.sp)
                 Text("词库里没有收录这个词", color = DuoWolf, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 return@Column
             }
-            Text(hit.head, fontSize = 32.sp, fontWeight = FontWeight.Black, color = DuoEel, lineHeight = 36.sp)
+            PronounceableWord(hit.head, fontSize = 32.sp, lineHeight = 36.sp)
             if (!hit.head.equals(token, ignoreCase = true)) {
                 Text("$token → ${hit.head}", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
