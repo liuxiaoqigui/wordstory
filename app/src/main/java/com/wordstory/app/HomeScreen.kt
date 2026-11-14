@@ -49,7 +49,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,7 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-data class Stats(val learned: Set<String>, val due: Int, val mastered: Int, val xpToday: Int, val streak: Int)
+data class Stats(val learned: Set<String>, val due: Int, val mastered: Int, val xpToday: Int, val streak: Int, val tough: Int)
 
 private val ZeroInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
 
@@ -87,7 +86,7 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
         value = withContext(Dispatchers.IO) {
             val today = today()
             Stats(r.user.learned(), r.user.dueCount(today), r.user.masteredCount(), r.user.xpOn(today),
-                streak(r.user.xpDays(), today))
+                streak(r.user.xpDays(), today), r.user.toughCount())
         }
     }
     val lessons by produceState<List<LessonInfo>?>(null) { value = withContext(Dispatchers.IO) { r.lessons } }
@@ -95,7 +94,7 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
     Scaffold(
         containerColor = DuoWhite,
         contentWindowInsets = ZeroInsets,
-        topBar = { stats?.let { Header(it) } },
+        topBar = { stats?.let { Header(it, r.prefs) } },
         bottomBar = { DuoNav(st.tab) { st.tab = it } },
     ) { pad ->
         val s = stats
@@ -105,7 +104,7 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
                 if (s == null || list == null) LoadingBox(pad)
                 else LessonsTab(list, s.learned, st, pad) { open(Screen.Lesson(it)) }
             }
-            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, r.prefs.getInt("blitz_best", 0), pad, onBlitz = { open(Screen.Blitz) }, onMatch = { open(Screen.Match) }, onSpell = { open(Screen.Spell) }) { open(Screen.Review) }
+            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, r.prefs.getInt("blitz_best", 0), pad, open)
             else -> SearchTab(r.words, st, pad, onPhonetics = { open(Screen.Phonetics) }) { open(Screen.Detail(it)) }
         }
     }
@@ -119,7 +118,7 @@ private fun LoadingBox(pad: PaddingValues) {
 }
 
 @Composable
-private fun Header(s: Stats) {
+private fun Header(s: Stats, prefs: android.content.SharedPreferences) {
     val ratio = (s.xpToday.toFloat() / DAILY_GOAL).coerceAtMost(1f)
     val done = s.xpToday >= DAILY_GOAL
     Column(Modifier.fillMaxWidth().background(DuoWhite).statusBarsPadding()) {
@@ -136,6 +135,7 @@ private fun Header(s: Stats) {
                 color = DuoOrange,
             )
             Spacer(Modifier.weight(1f))
+            LangChip(prefs, Modifier.padding(end = 14.dp))
             Text("⚡", fontSize = 18.sp)
             Text(
                 "${s.xpToday}",
@@ -402,7 +402,10 @@ fun LevelPicker(r: Repo, onPick: (Int) -> Unit) {
             .verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("🦉", fontSize = 56.sp, modifier = Modifier.padding(top = 24.dp))
+        Row(Modifier.fillMaxWidth().padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("🦉", fontSize = 56.sp, modifier = Modifier.weight(1f))
+            LangChip(r.prefs)
+        }
         Text("从哪里开始？", fontWeight = FontWeight.Black, fontSize = 30.sp, color = DuoEel)
         Text("选一个适合你的难度，之后在学习页顶部随时可以切换。", fontWeight = FontWeight.Bold, color = DuoWolf,
             fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.padding(bottom = 8.dp))
@@ -566,7 +569,7 @@ private fun rememberBob(): Dp {
 }
 
 @Composable
-private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () -> Unit, onMatch: () -> Unit, onSpell: () -> Unit, onReview: () -> Unit) {
+private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, open: (Screen) -> Unit) {
     BoxWithConstraints(Modifier.padding(pad).fillMaxSize()) {
         Column(
             Modifier
@@ -606,15 +609,45 @@ private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () 
             )
             DuoButton(
                 if (s.due > 0) "开始复习" else "今天没有要复习的词",
-                onClick = onReview,
+                onClick = { open(Screen.Review) },
                 enabled = s.due > 0,
             )
             Text("小游戏", modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
                 fontWeight = FontWeight.Black, fontSize = 18.sp, color = DuoEel)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GameTile("⚡", "闪电挑战", if (blitzBest > 0) "最高 $blitzBest 题" else "$BLITZ_SECONDS 秒抢答", DuoYellow, DuoYellowLip, DuoEel, onBlitz)
-                GameTile("🧩", "单词配对", "连连看", DuoPurple, DuoPurpleDark, DuoWhite, onMatch)
-                GameTile("✍️", "中译英", "看中文写单词", DuoBlue, DuoBlueDark, DuoWhite, onSpell)
+                GameTile("⚡", "闪电挑战", if (blitzBest > 0) "最高 $blitzBest 题" else "$BLITZ_SECONDS 秒抢答", DuoYellow, DuoYellowLip, DuoEel) { open(Screen.Blitz) }
+                GameTile("🧩", "单词配对", "连连看", DuoPurple, DuoPurpleDark, DuoWhite) { open(Screen.Match) }
+                GameTile("🧱", "拼写积木", "点字母拼单词", DuoGreen, DuoGreenDark, DuoWhite) { open(Screen.Tiles) }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GameTile("✍️", "中译英", "看中文写单词", DuoBlue, DuoBlueDark, DuoWhite) { open(Screen.Spell) }
+                GameTile("💪", "错词本", if (s.tough > 0) "${s.tough} 个词等你打败" else "还没有错词", DuoOrange, DuoOrangeDark, DuoWhite,
+                    enabled = s.tough > 0) { open(Screen.Tough) }
+            }
+            Text("成就", modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
+                fontWeight = FontWeight.Black, fontSize = 18.sp, color = DuoEel)
+            val (owl, title, next) = owlStage(s.learned.size)
+            Row(Modifier.fillMaxWidth().border2().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(owl, fontSize = 44.sp)
+                Column(Modifier.padding(start = 14.dp)) {
+                    Text(title, fontWeight = FontWeight.Black, fontSize = 18.sp, color = DuoEel)
+                    Text(if (next > 0) "再学会 ${next - s.learned.size} 个词就长大" else "已经长到最大了",
+                        fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DuoWolf)
+                }
+            }
+            badges(s.streak, s.learned.size, s.mastered).chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { b ->
+                        Column(
+                            Modifier.weight(1f).border2().background(if (b.done) DuoYellow.copy(alpha = 0.18f) else DuoWhite, RoundedCornerShape(16.dp))
+                                .padding(vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(if (b.done) b.icon else "🔒", fontSize = 26.sp)
+                            Text(b.name, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = if (b.done) DuoEel else DuoHare)
+                        }
+                    }
+                }
             }
         }
     }
@@ -623,9 +656,11 @@ private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () 
 @Composable
 private fun RowScope.GameTile(
     icon: String, title: String, sub: String, face: androidx.compose.ui.graphics.Color,
-    lip: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color, onClick: () -> Unit,
+    lip: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color, enabled: Boolean = true, onClick: () -> Unit,
 ) {
-    DuoTile(face, lip, onClick, Modifier.weight(1f).height(132.dp), fixed = true) {
+    DuoTile(if (enabled) face else DuoLock, if (enabled) lip else DuoLockLip, onClick, Modifier.weight(1f).height(132.dp),
+        enabled = enabled, fixed = true) {
+        val fg = if (enabled) fg else DuoHare
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // 图标垫一块白底圆，像贴纸
             Box(Modifier.size(52.dp).background(DuoWhite.copy(alpha = 0.9f), CircleShape), contentAlignment = Alignment.Center) {
@@ -654,7 +689,7 @@ private fun SearchTab(db: WordDb, st: HomeState, pad: PaddingValues, onPhonetics
     Column(Modifier.padding(pad).consumeWindowInsets(pad).imePadding().fillMaxSize()) {
         SearchField(st.query) { st.query = it }
         if (st.query.isBlank()) {
-            DuoButton("🔤 音标表 · 48 个国际音标", onPhonetics,
+            DuoButton(if (Lang.hant) "🔤 音标表 · 41 个 KK 音标" else "🔤 音标表 · 48 个国际音标", onPhonetics,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), face = DuoBlue, lip = DuoBlueDark)
         }
         if (st.query.isNotBlank() && results.isEmpty()) {

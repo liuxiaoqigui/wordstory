@@ -78,6 +78,8 @@ sealed interface Screen {
     data object Phonetics : Screen
     data object Match : Screen
     data object Spell : Screen
+    data object Tiles : Screen
+    data object Tough : Screen
 }
 
 /** 首页的状态放在外面，从详情页返回时标签页、搜索词、列表位置都还在 */
@@ -107,7 +109,7 @@ fun App() {
         return
     }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
-    val home = remember { HomeState(r.prefs) }
+    val home = remember { Lang.init(r.prefs); HomeState(r.prefs) }
     if (home.level == 0) {   // 第一次打开：先选从哪个难度开始
         LevelPicker(r) { home.selectLevel(it) }
         return
@@ -129,7 +131,9 @@ fun App() {
             Screen.Review -> ReviewScreen(r, onExit = { refresh++; pop() })
             Screen.Phonetics -> PhoneticsScreen(r.words, onBack = pop)
             Screen.Match -> MatchScreen(r, home.level, onExit = { refresh++; pop() })
-            Screen.Spell -> SpellScreen(r, home.level, onExit = { refresh++; pop() })
+            Screen.Spell -> SpellScreen(r, home.level, tiles = false, onExit = { refresh++; pop() })
+            Screen.Tiles -> SpellScreen(r, home.level, tiles = true, onExit = { refresh++; pop() })
+            Screen.Tough -> ReviewScreen(r, tough = true, onExit = { refresh++; pop() })
             Screen.Blitz -> BlitzScreen(r, home.level, onExit = { refresh++; pop() })
         }
         lookupWord?.let { WordSheet(r.words, it) { lookupWord = null } }

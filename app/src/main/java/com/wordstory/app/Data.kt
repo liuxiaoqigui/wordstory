@@ -15,14 +15,18 @@ data class Example(val en: String, val zh: String, val blank: String)
 
 data class Word(
     val word: String,
-    val phonetic: String?,
+    val dj: String?,
     val meaning: String?,
     val pos: String?,
     val level: Int,
     val lesson: Int,
     val sectionsJson: String = "[]",
     val examplesJson: String = "[]",
+    val kk: String? = null,
 ) {
+    /** 繁體显示台湾课本的 KK 音标，简体显示 DJ 音标 */
+    val phonetic get() = if (Lang.hant) kk else dj
+
     /** [(小节名, 正文)]；小节名为空的是开头没有标题的那段 */
     fun sections(): List<Pair<String, String>> = JSONArray(sectionsJson).let { a ->
         List(a.length()) { i -> a.getJSONObject(i).let { it.getString("t") to it.getString("b") } }
@@ -36,7 +40,9 @@ data class Word(
 data class LessonInfo(val lesson: Int, val level: Int, val words: List<String>)
 
 /** 点词查询的结果：head 是原形（spiders -> spider），story 是单词书里能看故事的词条 */
-data class Lookup(val head: String, val phonetic: String?, val meaning: String?, val story: String?)
+data class Lookup(val head: String, val dj: String?, val meaning: String?, val story: String?, val kk: String? = null) {
+    val phonetic get() = if (Lang.hant) kk else dj
+}
 
 /** 只读词库：APK 里的 assets/words.db 在首次启动或 App 更新后拷到 databases/ 再打开。 */
 class WordDb(context: Context) {
@@ -64,7 +70,7 @@ class WordDb(context: Context) {
         buildList {
             while (c.moveToNext()) add(
                 Word(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                    c.getInt(4), c.getInt(5), c.getString(6), c.getString(7)),
+                    c.getInt(4), c.getInt(5), c.getString(6), c.getString(7), c.getString(8)),
             )
         }
     }
@@ -87,8 +93,8 @@ class WordDb(context: Context) {
     }
 
     private fun findToken(token: String): Lookup? =
-        db.rawQuery("SELECT head, phonetic, meaning, story FROM lookup WHERE token = ?", arrayOf(token)).use { c ->
-            if (c.moveToFirst()) Lookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3)) else null
+        db.rawQuery("SELECT head, phonetic, meaning, story, kk FROM lookup WHERE token = ?", arrayOf(token)).use { c ->
+            if (c.moveToFirst()) Lookup(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4)) else null
         }
 
     fun lessonWords(lesson: Int): List<Word> =
@@ -132,7 +138,7 @@ class WordDb(context: Context) {
     }
 
     private companion object {
-        const val COLS = "word, phonetic, meaning, pos, level, lesson, sections, examples"
+        const val COLS = "word, phonetic, meaning, pos, level, lesson, sections, examples, kk"
     }
 }
 
@@ -184,6 +190,18 @@ class UserDb(context: Context) : SQLiteOpenHelper(context, "user.db", null, 1) {
             arrayOf<Any>(next, dueDay(today, next), word),
         )
     }
+
+    /** 错词本：答错过的词，错得多的在前 */
+    fun tough(limit: Int): List<String> =
+        readableDatabase.rawQuery("SELECT word FROM progress WHERE misses > 0 ORDER BY misses DESC, random() LIMIT ?",
+            arrayOf(limit.toString())).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
+    fun toughCount() = longs("SELECT count(*) FROM progress WHERE misses > 0").first().toInt()
+
+    /** 在错词本里答对一次，抵掉一次错误记录，抵完就移出错词本；答错再记一次 */
+    fun toughAnswer(word: String, correct: Boolean) = writableDatabase.execSQL(
+        "UPDATE progress SET misses = max(misses + ?, 0) WHERE word = ?", arrayOf<Any>(if (correct) -1 else 1, word),
+    )
 
     // 不用 UPSERT：Android 8~10 自带的 SQLite 还不支持
     fun addXp(day: Long, xp: Int) = writableDatabase.run {

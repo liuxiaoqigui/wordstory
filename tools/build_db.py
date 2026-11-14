@@ -39,6 +39,53 @@ def ipa(s):
 LEVEL_CUTS = [1000, 3000, 6000, 12000]
 
 
+# CMU 发音词典的 ARPAbet -> 台湾课本的 KK 音标。AH、ER 没有重音时是 ə、ɚ，有重音是 ʌ、ɝ
+KK = {"AA": "ɑ", "AE": "æ", "AO": "ɔ", "AW": "aʊ", "AY": "aɪ", "EH": "ɛ", "EY": "e", "IH": "ɪ", "IY": "i", "OW": "o",
+      "OY": "ɔɪ", "UH": "ʊ", "UW": "u", "B": "b", "CH": "tʃ", "D": "d", "DH": "ð", "F": "f", "G": "g", "HH": "h",
+      "JH": "dʒ", "K": "k", "L": "l", "M": "m", "N": "n", "NG": "ŋ", "P": "p", "R": "r", "S": "s", "SH": "ʃ", "T": "t",
+      "TH": "θ", "V": "v", "W": "w", "Y": "j", "Z": "z", "ZH": "ʒ"}
+# 能放在音节开头的辅音组合，用来决定重音符号标在哪个辅音前面（extreme -> ɪkˋstrim）
+ONSETS = {"P L", "P R", "B L", "B R", "T R", "D R", "K L", "K R", "G L", "G R", "F L", "F R", "TH R", "SH R",
+          "S P", "S T", "S K", "S M", "S N", "S L", "S W", "S F", "T W", "D W", "K W", "G W", "TH W",
+          "S P L", "S P R", "S T R", "S K R", "S K W"}
+
+
+def kk(arpa):
+    """'HH AE1 P IY0' -> 'ˋhæpi'。主重音 ˋ、次重音 ˏ 标在音节前，单音节词不标。"""
+    phones = arpa.split()
+    stress_of = lambda p: p[-1] if p[-1].isdigit() else None
+    multi = sum(1 for p in phones if stress_of(p)) > 1
+    out, run = [], []   # run = 上一个元音之后还没输出的辅音
+    for p in phones:
+        st = stress_of(p)
+        if st is None:
+            run.append(p)
+            continue
+        base = p[:-1]
+        vowel = ("ə" if st == "0" else "ʌ") if base == "AH" else ("ɚ" if st == "0" else "ɝ") if base == "ER" else KK[base]
+        n = len(run)   # 归到这个音节开头的辅音数：词首全算，词中取最长的合法组合
+        if out:
+            n = next((k for k in (3, 2) if k <= len(run) and (" ".join(run[-k:]) in ONSETS or
+                      (run[-1] == "Y" and k == 2))), min(1, len(run)))
+            if run and run[-1] == "NG":
+                n = 0
+        mark = {"1": "ˋ", "2": "ˏ"}.get(st, "") if multi else ""
+        out += [KK[c] for c in run[:len(run) - n]] + [mark] + [KK[c] for c in run[len(run) - n:]] + [vowel]
+        run = []
+    return "".join(out + [KK[c] for c in run])
+
+
+def load_cmudict(path):
+    """word -> KK。一个词有多个读音时用第一个（read 只收 /rɛd/）。"""
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            word, _, arpa = line.split("#")[0].strip().partition(" ")
+            if arpa and "(" not in word:
+                out[word] = kk(arpa)
+    return out
+
+
 def rank_of(ec):
     """COCA(frq) 和 BNC 词频排名取更常用的那个；两个都没有排最后。"""
     return min([r for r in (int(ec.get("frq") or 0), int(ec.get("bnc") or 0)) if r] or [10 ** 9])
@@ -177,8 +224,8 @@ def tokens_of(rows):
     return out
 
 
-def build_lookup(rows, lower):
-    """点词查询表：token -> (显示的词, 音标, 释义, 单词书里的词条)。
+def build_lookup(rows, lower, cmu={}):
+    """点词查询表：token -> (显示的词, 音标, 释义, 单词书里的词条, KK 音标)。
     书里有的词用书里的数据；变形词（spiders、went）按 ECDICT 的原形查；两边都查不到的不收。"""
     book = {}
     for r in rows:   # 大小写重复时用小写那条：march 而不是 March
@@ -197,12 +244,12 @@ def build_lookup(rows, lower):
         head = lemma if tok not in book and (lemma in book or lemma in lower) else tok
         if head in book:
             b = book[head]
-            out[tok] = (b["word"], b["phonetic"], b["meaning"], b["word"])
+            out[tok] = (b["word"], b["phonetic"], b["meaning"], b["word"], cmu.get(head))
         else:
             row = lower.get(head) or ec
             meaning = short_meaning(row.get("translation") or "") if row else None
             if meaning:
-                out[tok] = (row["word"], ipa(row.get("phonetic")), meaning, None)
+                out[tok] = (row["word"], ipa(row.get("phonetic")), meaning, None, cmu.get(head))
     return out
 
 
@@ -216,8 +263,9 @@ def load_ecdict(path):
     return exact, lower
 
 
-def main(gpt_path, ecdict_path, out_path):
+def main(gpt_path, ecdict_path, cmu_path, out_path):
     exact, lower = load_ecdict(ecdict_path)
+    cmu = load_cmudict(cmu_path)
     rows, seen = [], set()
     for line in open(gpt_path, encoding="utf-8"):
         d = json.loads(line)
@@ -240,7 +288,7 @@ def main(gpt_path, ecdict_path, out_path):
         examples = parse_examples(by_title.get("列举例句", ""), forms) or \
             parse_examples(by_title.get("", ""), forms, list_only=True)
         meaning = short_meaning(ec.get("translation") or "")
-        rows.append(dict(word=word, phonetic=ipa(ec.get("phonetic")), meaning=meaning,
+        rows.append(dict(word=word, phonetic=ipa(ec.get("phonetic")), kk=cmu.get(word.lower()), meaning=meaning,
                          pos=pos_of(meaning), level=level_of(ec), rank=rank_of(ec), sections=secs, examples=examples))
 
     rows.sort(key=lambda r: (r["level"], r["rank"], r["word"].lower()))
@@ -256,21 +304,21 @@ def main(gpt_path, ecdict_path, out_path):
     db.execute("PRAGMA page_size=16384")  # 每行约 2.4KB，默认 4KB 页只能放一行，浪费近一半
     db.execute("""CREATE TABLE words(
         id INTEGER PRIMARY KEY, word TEXT NOT NULL UNIQUE, phonetic TEXT, meaning TEXT, pos TEXT,
-        level INTEGER NOT NULL, lesson INTEGER NOT NULL, sections TEXT NOT NULL, examples TEXT NOT NULL)""")
+        level INTEGER NOT NULL, lesson INTEGER NOT NULL, sections TEXT NOT NULL, examples TEXT NOT NULL, kk TEXT)""")
     lesson, prev_level, n_in_lesson = 0, None, 0
     for i, r in enumerate(rows, 1):
         if r["quiz"]:
             if r["level"] != prev_level or n_in_lesson == 10:   # 每关 10 词，换等级就换关
                 lesson += 1; n_in_lesson = 0; prev_level = r["level"]
             n_in_lesson += 1
-        db.execute("INSERT INTO words VALUES(?,?,?,?,?,?,?,?,?)",
+        db.execute("INSERT INTO words VALUES(?,?,?,?,?,?,?,?,?,?)",
                    (i, r["word"], r["phonetic"], r["meaning"], r["pos"], r["level"], lesson if r["quiz"] else 0,
-                    json.dumps(r["sections"], ensure_ascii=False), json.dumps(r["examples"], ensure_ascii=False)))
+                    json.dumps(r["sections"], ensure_ascii=False), json.dumps(r["examples"], ensure_ascii=False), r["kk"]))
     db.execute("CREATE INDEX words_lesson ON words(lesson)")
-    lookup = build_lookup(rows, lower)
+    lookup = build_lookup(rows, lower, cmu)
     db.execute("""CREATE TABLE lookup(token TEXT PRIMARY KEY, head TEXT NOT NULL, phonetic TEXT, meaning TEXT,
-        story TEXT) WITHOUT ROWID""")
-    db.executemany("INSERT INTO lookup VALUES(?,?,?,?,?)", [(t, *v) for t, v in lookup.items()])
+        story TEXT, kk TEXT) WITHOUT ROWID""")
+    db.executemany("INSERT INTO lookup VALUES(?,?,?,?,?,?)", [(t, *v) for t, v in lookup.items()])
     print(f"lookup tokens={len(lookup)}")
     db.commit()
     db.execute("VACUUM")
@@ -328,13 +376,18 @@ def self_check():
              "went": {"word": "went", "exchange": "0:go/1:p", "translation": "go的过去式"},
              "go": {"word": "go", "phonetic": "gəu", "translation": "v. 去"},
              "he": {"word": "he", "phonetic": "hi:", "translation": "pron. 他"}}
-    lk = build_lookup([spider], lower)
-    assert lk["spiders"] == ("spider", "ˈspaidə", "n. 蜘蛛", "spider"), lk["spiders"]
-    assert lk["went"] == ("go", "gəu", "v. 去", None), lk["went"]
-    assert lk["he"] == ("he", "hiː", "pron. 他", None) and "he's" not in lk and "xyzzy" not in lk, lk
+    lk = build_lookup([spider], lower, {"go": "go"})
+    assert lk["spiders"] == ("spider", "ˈspaidə", "n. 蜘蛛", "spider", None), lk["spiders"]
+    assert lk["went"] == ("go", "gəu", "v. 去", None, "go"), lk["went"]
+    assert lk["he"] == ("he", "hiː", "pron. 他", None, None) and "he's" not in lk and "xyzzy" not in lk, lk
     assert ipa("ә'bænd:") == "əˈbændː" and ipa("") is None
     assert ipa("fɒ:") == "fɔː" and ipa("bɒi") == "bɔi" and ipa("ðєə") == "ðeə" and ipa("hə:") == "hɜː"
     assert ipa("^ɔd") == "gɔd" and ipa(".infə'meiʃən") == "ˌinfəˈmeiʃən" and ipa("nɒt") == "nɒt"
+    # KK：单音节不标重音；重音标在音节开头的辅音前；AH/ER 按重音分 ʌ/ə、ɝ/ɚ
+    assert kk("K AE1 T") == "kæt" and kk("HH AE1 P IY0") == "ˋhæpi" and kk("AH0 B AW1 T") == "əˋbaʊt"
+    assert kk("T IY1 CH ER0") == "ˋtitʃɚ" and kk("B AH1 T ER0") == "ˋbʌtɚ" and kk("IH0 K S T R IY1 M") == "ɪkˋstrim"
+    assert kk("S IH1 NG ER0") == "ˋsɪŋɚ" and kk("R IY2 D AH0 B IH1 L IH0 T IY0") == "ˏridəˋbɪlɪti", kk("R IY2 D AH0 B IH1 L IH0 T IY0")
+    assert kk("M Y UW1 Z IH0 K") == "ˋmjuzɪk" and kk("R IH0 F Y UW1 Z") == "rɪˋfjuz"
     # 难度：两个词频取更常用的；边界值归低一级；牛津核心词至多简单；没有词频是地狱
     assert level_of({"frq": "1000", "bnc": "5000"}) == 1 and level_of({"frq": "0", "bnc": "1001"}) == 2
     assert level_of({"frq": "12000"}) == 4 and level_of({"frq": "12001"}) == 5 and level_of({}) == 5
@@ -343,4 +396,4 @@ def self_check():
 
 if __name__ == "__main__":
     self_check()
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -112,7 +111,7 @@ internal class OfflineWordSpeech(private val context: Context) {
         engine = null
     }
 
-    private fun message(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+    private fun message(text: String) = Toast.makeText(context, Lang.zh(text), Toast.LENGTH_LONG).show()
 }
 
 @Composable

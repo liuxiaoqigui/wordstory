@@ -57,8 +57,25 @@ class LearnTest {
     @Test
     fun everyPhoneticExampleMarksItsLetters() {
         assertEquals(MarkedWord("s", "ee", ""), splitMark("s[ee]"))
-        val all = PHONETIC_GROUPS.flatMap { it.second }
-        assertEquals(48, all.size)
+        assertEquals(41, KK_GROUPS.sumOf { it.second.size })
+        val all = (PHONETIC_GROUPS + KK_GROUPS).flatMap { it.second }
+        assertEquals(48 + 41, all.size)
         all.forEach { (_, words) -> words.split(" ").forEach { assertTrue(it, splitMark(it).sound.isNotEmpty()) } }
+    }
+
+    @Test
+    fun shortMeaningKeepsFirstTwoSensesOfFirstPartOfSpeech() {
+        assertEquals("n. 一阵风, 爆炸", shortMeaning("n. 一阵风, 爆炸, 枯萎病；vt. 炸, 使枯萎"))
+        assertEquals("n. 女演员", shortMeaning("n. 女演员"))
+    }
+
+    @Test
+    fun badgesAndOwlFollowProgress() {
+        assertEquals(0, badges(0, 0, 0).count { it.done })
+        assertEquals(listOf("连续 3 天", "学会 50 词"), badges(3, 50, 0).filter { it.done }.map { it.name })
+        assertEquals(6, badges(7, 200, 100).count { it.done })
+        assertEquals("🥚", owlStage(19).first)
+        assertEquals("🐣", owlStage(20).first)
+        assertEquals(0, owlStage(300).third)
     }
 }

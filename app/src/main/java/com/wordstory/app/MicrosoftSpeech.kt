@@ -234,7 +234,7 @@ class WordSpeech(private val context: Context) {
 
     private fun fallback(word: String) {
         preparingWord = null
-        Toast.makeText(context, "微软发音暂时不可用，改用系统发音", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, Lang.zh("微软发音暂时不可用，改用系统发音"), Toast.LENGTH_LONG).show()
         offline.speak(word)
     }
 

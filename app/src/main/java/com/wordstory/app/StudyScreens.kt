@@ -1,5 +1,6 @@
 package com.wordstory.app
 
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -45,7 +46,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -204,6 +204,7 @@ fun LessonScreen(r: Repo, info: LessonInfo, onExit: () -> Unit) {
                 val today = today()
                 val earned = LESSON_XP + s.firstTryCorrect
                 r.user.learn(words.map { it.word }, today)
+                s.missedWords.forEach { r.user.toughAnswer(it, false) }   // 闯关答错的词进错词本
                 r.user.addXp(today, earned)
                 xp = earned
             }
@@ -437,9 +438,11 @@ private fun Result(pad: PaddingValues, title: String, xp: Int, detail: String, o
 }
 
 @Composable
-fun ReviewScreen(r: Repo, onExit: () -> Unit) {
+fun ReviewScreen(r: Repo, tough: Boolean = false, onExit: () -> Unit) {
     val session by produceState<QuizSession?>(null) {
-        value = withContext(Dispatchers.IO) { QuizSession(reviewQuiz(r.words, r.words.words(r.user.due(today(), 20)))) }
+        value = withContext(Dispatchers.IO) {
+            QuizSession(reviewQuiz(r.words, r.words.words(if (tough) r.user.tough(10) else r.user.due(today(), 20))))
+        }
     }
     var done by remember { mutableStateOf(false) }
     val s = session
@@ -450,11 +453,12 @@ fun ReviewScreen(r: Repo, onExit: () -> Unit) {
     ) { pad ->
         when {
             s == null -> Loading(pad)
-            done -> Result(pad, "复习完成！", s.firstTryCorrect, s.summary(), onExit)
+            done -> Result(pad, if (tough) "错词练完了！" else "复习完成！", s.firstTryCorrect, s.summary(), onExit)
             // 每个词第一次作答就记进度和 XP，中途退出也不白复习
             else -> QuizView(s, pad, onFirstTry = { w, ok ->
                 val today = today()
-                r.user.review(w.word, ok, today)
+                // 错词本只动错误次数，不动复习的格子和日期
+                if (tough) r.user.toughAnswer(w.word, ok) else r.user.review(w.word, ok, today)
                 if (ok) r.user.addXp(today, 1)
             }) { done = true }
         }
@@ -545,11 +549,26 @@ val PHONETIC_GROUPS: List<Pair<String, List<Pair<String, String>>>> = listOf(
         "j" to "[y]es [y]ou", "w" to "[w]e [w]ay"),
 )
 
+/** 台湾课本的 41 个 KK 音标 */
+val KK_GROUPS: List<Pair<String, List<Pair<String, String>>>> = listOf(
+    "单元音" to listOf("i" to "s[ee] t[ea]", "ɪ" to "s[i]t b[i]g", "e" to "s[ay] m[a]ke", "ɛ" to "g[e]t r[e]d", "æ" to "c[a]t [a]nd",
+        "ɑ" to "h[o]t f[a]ther", "ɔ" to "[a]ll d[o]g", "o" to "g[o] kn[ow]", "ʊ" to "g[oo]d b[oo]k", "u" to "d[o] bl[ue]",
+        "ʌ" to "[u]p b[u]t", "ə" to "[a]bout [a]go", "ɝ" to "h[er] f[ir]st", "ɚ" to "teach[er] sist[er]"),
+    "双元音" to listOf("aɪ" to "m[y] t[i]me", "aʊ" to "n[ow] [ou]t", "ɔɪ" to "b[oy] v[oi]ce"),
+    "清辅音" to listOf("p" to "[p]en ma[p]", "t" to "[t]en [t]wo", "k" to "[k]ey boo[k]", "f" to "[f]ive li[f]e",
+        "θ" to "[th]ink [th]ree", "s" to "[s]ee bu[s]", "ʃ" to "[sh]e fi[sh]", "tʃ" to "[ch]ild mu[ch]", "h" to "[h]e [h]ome"),
+    "浊辅音" to listOf("b" to "[b]ig jo[b]", "d" to "[d]ay re[d]", "g" to "[g]o bi[g]", "v" to "[v]ery fi[v]e",
+        "ð" to "[th]at [th]ey", "z" to "[z]oo hi[s]", "ʒ" to "u[s]ually televi[si]on", "dʒ" to "[j]ob lar[ge]"),
+    "鼻音和其他" to listOf("m" to "[m]e ti[m]e", "n" to "[n]o te[n]", "ŋ" to "si[ng] lo[ng]", "l" to "[l]ike a[ll]",
+        "r" to "[r]ed [r]ight", "j" to "[y]es [y]ou", "w" to "[w]e [w]ay"),
+)
+
 // shortcut: 没有单个音素的录音，只能点例词听这个音；有了音素音频再给音标本身加喇叭
 @Composable
 fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
+    val groups = if (Lang.hant) KK_GROUPS else PHONETIC_GROUPS
     val phonetic by produceState(emptyMap<String, String?>()) {
-        val words = PHONETIC_GROUPS.flatMap { g -> g.second.flatMap { it.second.split(" ") } }.map { splitMark(it).word }.distinct()
+        val words = groups.flatMap { g -> g.second.flatMap { it.second.split(" ") } }.map { splitMark(it).word }.distinct()
         value = withContext(Dispatchers.IO) { db.words(words).associate { it.word to it.phonetic } }
     }
     Scaffold(containerColor = DuoWhite, contentWindowInsets = ZeroInsets, topBar = { TopBar(onBack) }) { pad ->
@@ -560,10 +579,10 @@ fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
         ) {
             item {
                 Text("音标表", fontSize = 28.sp, fontWeight = FontWeight.Black, color = DuoEel)
-                Text("48 个国际音标。例词里标蓝的字母就读这个音，点喇叭听。", modifier = Modifier.padding(top = 4.dp),
+                Text((if (Lang.hant) "41 个 KK 音标。" else "48 个国际音标。") + "例词里标蓝的字母就读这个音，点喇叭听。", modifier = Modifier.padding(top = 4.dp),
                     color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 22.sp)
             }
-            PHONETIC_GROUPS.forEach { (group, symbols) ->
+            groups.forEach { (group, symbols) ->
                 item(key = group) {
                     Text(group, modifier = Modifier.padding(top = 8.dp), color = DuoGreenDark, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                 }
@@ -596,7 +615,7 @@ fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
 fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
     val rounds by produceState<List<List<Word>>?>(null) {
         // 意思相同的词只留一个，免得一个意思能配两个词
-        value = withContext(Dispatchers.IO) { r.words.randomWords(level, 10).distinctBy { it.meaning }.chunked(5) }
+        value = withContext(Dispatchers.IO) { r.words.randomWords(level, 10).distinctBy { shortMeaning(it.meaning ?: "") }.chunked(5) }
     }
     var round by remember { mutableIntStateOf(0) }
     var mistakes by remember { mutableIntStateOf(0) }
@@ -669,7 +688,7 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
                                     right == i -> ChoiceTone.Selected
                                     else -> ChoiceTone.Idle
                                 }
-                                MatchCard(w.meaning ?: "", tone, DuoWhite, DuoSwan, DuoEel) { if (wrong == null) { right = if (right == i) null else i; check() } }
+                                MatchCard(shortMeaning(w.meaning ?: ""), tone, DuoWhite, DuoSwan, DuoEel) { if (wrong == null) { right = if (right == i) null else i; check() } }
                             }
                         }
                     }
@@ -718,9 +737,9 @@ private fun MatchCard(text: String, tone: ChoiceTone, face: Color, lip: Color, f
     }
 }
 
-/** 中译英：看中文释义，输入英文单词。每题只答一次，答对一题 1 XP */
+/** 中译英：看中文释义，输入英文单词。每题只答一次，答对一题 1 XP。tiles = 拼写积木，点打乱的字母块代替键盘 */
 @Composable
-fun SpellScreen(r: Repo, level: Int, onExit: () -> Unit) {
+fun SpellScreen(r: Repo, level: Int, tiles: Boolean, onExit: () -> Unit) {
     val words by produceState<List<Word>?>(null) {
         value = withContext(Dispatchers.IO) { r.words.randomWords(level, SPELL_QUESTIONS) }
     }
@@ -739,19 +758,47 @@ fun SpellScreen(r: Repo, level: Int, onExit: () -> Unit) {
     ) { pad ->
         when {
             all == null -> Loading(pad)
-            over -> Result(pad, "翻译完成！", correct, "答对 $correct / ${all.size}", onExit)
+            over -> Result(pad, if (tiles) "拼写完成！" else "翻译完成！", correct, "答对 $correct / ${all.size}", onExit)
             else -> {
                 val w = all[index]
                 val check = { if (ok == null && input.isNotBlank()) { ok = spelledRight(input, w.word); if (ok == true) correct++ } }
-                LaunchedEffect(index) { focus.requestFocus() }
+                if (!tiles) LaunchedEffect(index) { focus.requestFocus() }
                 Column(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().imePadding()) {
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Prompt("写出这个意思的英文单词")
-                        Text(w.meaning ?: "", color = DuoEel, fontWeight = FontWeight.Black, fontSize = 24.sp, lineHeight = 32.sp)
+                        Prompt(if (tiles) "点字母，拼出这个意思的单词" else "写出这个意思的英文单词")
+                        Text(shortMeaning(w.meaning ?: ""), color = DuoEel, fontWeight = FontWeight.Black, fontSize = 24.sp, lineHeight = 32.sp)
                         // 一个中文意思可能对应好几个词，给出首字母和长度，答案才唯一
+                        if (tiles) {
+                            val letters = remember(index) { w.word.toList().shuffled() }
+                            val picked = remember(index) { mutableStateListOf<Int>() }   // 按点的顺序记字母块的下标
+                            fun sync() { input = picked.joinToString("") { letters[it].toString() } }
+                            // 拼出来的词，点一下退掉最后一个字母
+                            Text(
+                                input.ifEmpty { " " },
+                                modifier = Modifier.fillMaxWidth().bordered()
+                                    .clickable(enabled = ok == null && picked.isNotEmpty()) { picked.removeAt(picked.lastIndex); sync() }
+                                    .padding(horizontal = 14.dp, vertical = 16.dp),
+                                color = DuoEel, fontWeight = FontWeight.Black, fontSize = 28.sp, textAlign = TextAlign.Center,
+                                letterSpacing = 3.sp,
+                            )
+                            Text("点上面的框可以退掉一个字母", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            letters.indices.chunked(6).forEach { row ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    row.forEach { i ->
+                                        val used = i in picked
+                                        DuoTile(
+                                            if (used) DuoPolar else DuoWhite, DuoSwan, { picked += i; sync() },
+                                            Modifier.width(50.dp), enabled = !used && ok == null,
+                                        ) {
+                                            Text(letters[i].toString(), color = if (used) DuoSwan else DuoEel, fontWeight = FontWeight.Black, fontSize = 24.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
                         Text("提示：以 ${w.word.first()} 开头，共 ${w.word.length} 个字母", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         OutlinedTextField(
                             value = input,
@@ -767,6 +814,7 @@ fun SpellScreen(r: Repo, level: Int, onExit: () -> Unit) {
                             ),
                             keyboardActions = KeyboardActions(onDone = { check() }),
                         )
+                        }
                     }
                     val result = ok
                     if (result == null) {

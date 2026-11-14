@@ -15,7 +15,10 @@
 - **闪电挑战**：复习页进入，60 秒内从当前难度随机出选义题，答对一题得 1 XP，并记录最高纪录。
 - **单词配对**：复习页进入，左边单词、右边意思，各点一个配成对；每轮 5 对，共两轮，完成得 5 XP。
 - **中译英**：复习页进入，从当前难度随机出 12 题，上面是中文释义，在输入框里写出英文单词；不分大小写，提示首字母和字母数，答对一题得 1 XP。
-- **激励**：连续打卡天数、每日 20 XP 目标。
+- **拼写积木**：复习页进入，字母打乱成积木块，点字母拼出单词，不用键盘；12 题，答对一题得 1 XP。
+- **错词本**：复习页进入，收集闯关和复习时第一次就答错的词，错得多的在前，每次练 10 个。答对一次抵掉一次错误，抵完移出。
+- **简体 / 繁體**：首页右上角切换，首次打开按系统语言决定。繁體模式下界面和词库内容在显示时逐字转成繁体（Android 10 起，用系统 ICU；一简对多繁的字会错，也不换台湾用词），音标显示台湾课本的 KK 音标，音标表换成 41 个 KK 音标。
+- **激励**：连续打卡天数、每日 20 XP 目标、猫头鹰随学会的词数长大、6 个徽章。
 - **离线学习**：词库和学习进度都保存在手机上，学习、测验、复习和查词不依赖网络。网络权限仅用于获取微软单词发音，请求内容为当前词、接下来的两个词，以及首页下一关的前三个词。
 
 ### 等级说明
@@ -62,7 +65,8 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 ```bash
 curl -LO https://raw.githubusercontent.com/Ceelog/DictionaryByGPT4/main/gptwords.json
 curl -LO https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv
-python3 -I tools/build_db.py gptwords.json ecdict.csv app/src/main/assets/words.db
+curl -LO https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict
+python3 -I tools/build_db.py gptwords.json ecdict.csv cmudict.dict app/src/main/assets/words.db
 ```
 
 脚本会先跑自检，再打印数据覆盖情况。当前数据：
@@ -98,6 +102,7 @@ python3 -I tools/build_db.py gptwords.json ecdict.csv app/src/main/assets/words.
 | `.../MicrosoftSpeech.kt` | 微软 Jenny 正常语速、MP3 缓存与播放 |
 | `.../EdgeToken.kt` | Edge TTS v2 握手，与 edge-tts 参考实现对照测试 |
 | `.../Theme.kt` | 配色、字体、按钮等界面组件 |
+| `.../Lang.kt` | 简体 / 繁體切换，显示时转换文字 |
 | `app/src/test/.../LearnTest.kt` | 复习算法和答题队列的单元测试 |
 
 ## 数据来源与许可
@@ -108,6 +113,7 @@ python3 -I tools/build_db.py gptwords.json ecdict.csv app/src/main/assets/words.
 
 - 单词故事来自 [Ceelog/DictionaryByGPT4](https://github.com/Ceelog/DictionaryByGPT4)（威威的 GPT 单词本），许可为 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)。`words.db` 由它重新整理而来（切分小节、抽取例句、合并音标和释义），因此 `words.db` 同样以 CC BY-SA 4.0 发布。
 - 音标、释义、词频、牛津 3000 标记和词形变化来自 [skywind3000/ECDICT](https://github.com/skywind3000/ECDICT)，MIT 许可，见 [licenses/ECDICT-MIT.txt](licenses/ECDICT-MIT.txt)。
+- KK 音标由 [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict) 的美式发音转写而来，BSD 许可，见 [licenses/CMUdict-BSD.txt](licenses/CMUdict-BSD.txt)。一个词有多个读音时取第一个（read 只有 /rɛd/），闯关词里 98% 有 KK。
 - 字体为 [Nunito](https://github.com/googlefonts/nunito)，SIL Open Font License 1.1，见 [licenses/OFL-Nunito.txt](licenses/OFL-Nunito.txt)。
 
 单词故事由 GPT-4 生成，可能有错。例如 AD 只解释了“广告”，没有提到“公元”。

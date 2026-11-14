@@ -32,6 +32,26 @@ fun streak(xpDays: Set<Long>, today: Long): Int {
     return n
 }
 
+/** 题目里用的简短释义：只留第一个词性的前两个意思，完整释义在学习卡片和详情页 */
+fun shortMeaning(meaning: String) = meaning.substringBefore('；').split(", ").take(2).joinToString(", ")
+
+data class Badge(val icon: String, val name: String, val done: Boolean)
+
+// shortcut: 徽章按当前数据现算，不单独存；连续打卡断了，打卡徽章会变回未获得。要永久保留时再加一张表
+fun badges(streak: Int, learned: Int, mastered: Int) = listOf(
+    Badge("🔥", "连续 3 天", streak >= 3), Badge("🌋", "连续 7 天", streak >= 7),
+    Badge("📖", "学会 50 词", learned >= 50), Badge("📚", "学会 200 词", learned >= 200),
+    Badge("🏅", "掌握 20 词", mastered >= 20), Badge("🏆", "掌握 100 词", mastered >= 100),
+)
+
+/** 猫头鹰随学会的词数长大：(样子, 称号, 下一阶段要学会的词数；0 = 已经最大) */
+fun owlStage(learned: Int) = when {
+    learned < 20 -> Triple("🥚", "一颗蛋", 20)
+    learned < 100 -> Triple("🐣", "刚破壳", 100)
+    learned < 300 -> Triple("🐥", "小雏鸟", 300)
+    else -> Triple("🦉", "猫头鹰博士", 0)
+}
+
 sealed interface Question {
     val word: Word
     val options: List<String>
@@ -64,8 +84,10 @@ fun buildQuestion(
             ClozeQuestion(w, examples.random(), options, options.indexOf(w.word))
         }
         w.meaning != null -> {
-            val options = (db.distractorMeanings(w, 3) + w.meaning).shuffled()
-            MeaningQuestion(w, options, options.indexOf(w.meaning), listen)
+            val short = shortMeaning(w.meaning)
+            // 多抽几个：缩短以后可能和答案或彼此重复
+            val options = (db.distractorMeanings(w, 6).map(::shortMeaning).filter { it != short }.distinct().take(3) + short).shuffled()
+            MeaningQuestion(w, options, options.indexOf(short), listen)
         }
         else -> null
     }
@@ -90,6 +112,8 @@ class QuizSession(questions: List<Question>) {
     /** 每换一题加一，界面用它重置选中状态（同一道题答错后可能马上又轮到它） */
     var step by mutableIntStateOf(0); private set
     val firstTryCorrect get() = attempted.size - missed.size
+    /** 第一次作答就答错的词 */
+    val missedWords: Set<String> get() = missed
     /** 当前连续答对的题数，答错清零 */
     var combo = 0; private set
     var maxCombo = 0; private set
