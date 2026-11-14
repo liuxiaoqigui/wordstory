@@ -2,6 +2,7 @@ package com.wordstory.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LearnTest {
@@ -51,5 +52,13 @@ class LearnTest {
         assertEquals(3, s.step)
         assertEquals(2, s.maxCombo)   // 错、对、对：答错清零，之后连对两题
         assertEquals(2, s.combo)
+    }
+
+    @Test
+    fun everyPhoneticExampleMarksItsLetters() {
+        assertEquals(MarkedWord("s", "ee", ""), splitMark("s[ee]"))
+        val all = PHONETIC_GROUPS.flatMap { it.second }
+        assertEquals(48, all.size)
+        all.forEach { (_, words) -> words.split(" ").forEach { assertTrue(it, splitMark(it).sound.isNotEmpty()) } }
     }
 }

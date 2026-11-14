@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -115,12 +116,14 @@ internal class OfflineWordSpeech(private val context: Context) {
 }
 
 @Composable
-fun PronounceableWord(word: String, fontSize: TextUnit = 40.sp, lineHeight: TextUnit = 44.sp) {
+fun PronounceableWord(
+    word: String, fontSize: TextUnit = 40.sp, lineHeight: TextUnit = 44.sp, text: AnnotatedString = AnnotatedString(word),
+) {
     val speech = LocalWordSpeech.current
     LaunchedEffect(word, speech) { speech?.prefetch(listOf(word)) }
     val preparing = speech?.preparingWord == word
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(word, modifier = Modifier.weight(1f), fontSize = fontSize, lineHeight = lineHeight,
+        Text(text, modifier = Modifier.weight(1f), fontSize = fontSize, lineHeight = lineHeight,
             fontWeight = FontWeight.Black, color = DuoEel)
         IconButton(onClick = { speech?.speak(word) }, enabled = !preparing) {
             if (preparing) {

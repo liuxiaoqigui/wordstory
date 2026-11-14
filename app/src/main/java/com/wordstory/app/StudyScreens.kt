@@ -58,6 +58,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -520,25 +521,29 @@ fun BlitzScreen(r: Repo, level: Int, onExit: () -> Unit) {
 }
 
 /** 课本上的 48 个国际音标，每个配两个词库里的例词 */
+// 方括号里是发这个音的字母，显示时标蓝
 val PHONETIC_GROUPS: List<Pair<String, List<Pair<String, String>>>> = listOf(
-    "长元音" to listOf("iː" to "see tea", "ɜː" to "her first", "ɑː" to "car father", "ɔː" to "all more", "uː" to "do blue"),
-    "短元音" to listOf("i" to "sit big", "e" to "get red", "æ" to "cat and", "ʌ" to "up but", "ɒ" to "not hot",
-        "u" to "good book", "ə" to "about ago"),
-    "双元音" to listOf("ei" to "say make", "ai" to "my time", "ɔi" to "boy voice", "əu" to "go know", "au" to "now out",
-        "iə" to "here year", "eə" to "air there", "uə" to "sure poor"),
-    "清辅音" to listOf("p" to "pen map", "t" to "ten two", "k" to "key book", "f" to "five life", "θ" to "think three",
-        "s" to "see bus", "ʃ" to "she fish", "tʃ" to "child much", "h" to "he home", "tr" to "tree try", "ts" to "its pants"),
-    "浊辅音" to listOf("b" to "big job", "d" to "day red", "g" to "go big", "v" to "very five", "ð" to "that they",
-        "z" to "zoo his", "ʒ" to "usually television", "dʒ" to "job large", "r" to "red right", "dr" to "drink dry",
-        "dz" to "besides odds"),
-    "鼻音和其他" to listOf("m" to "me time", "n" to "no ten", "ŋ" to "sing long", "l" to "like all", "j" to "yes you", "w" to "we way"),
+    "长元音" to listOf("iː" to "s[ee] t[ea]", "ɜː" to "h[er] f[ir]st", "ɑː" to "c[ar] f[a]ther", "ɔː" to "[a]ll m[ore]",
+        "uː" to "d[o] bl[ue]"),
+    "短元音" to listOf("i" to "s[i]t b[i]g", "e" to "g[e]t r[e]d", "æ" to "c[a]t [a]nd", "ʌ" to "[u]p b[u]t", "ɒ" to "n[o]t h[o]t",
+        "u" to "g[oo]d b[oo]k", "ə" to "[a]bout [a]go"),
+    "双元音" to listOf("ei" to "s[ay] m[a]ke", "ai" to "m[y] t[i]me", "ɔi" to "b[oy] v[oi]ce", "əu" to "g[o] kn[ow]",
+        "au" to "n[ow] [ou]t", "iə" to "h[ere] y[ear]", "eə" to "[air] th[ere]", "uə" to "s[ure] p[oor]"),
+    "清辅音" to listOf("p" to "[p]en ma[p]", "t" to "[t]en [t]wo", "k" to "[k]ey boo[k]", "f" to "[f]ive li[f]e",
+        "θ" to "[th]ink [th]ree", "s" to "[s]ee bu[s]", "ʃ" to "[sh]e fi[sh]", "tʃ" to "[ch]ild mu[ch]", "h" to "[h]e [h]ome",
+        "tr" to "[tr]ee [tr]y", "ts" to "i[ts] pan[ts]"),
+    "浊辅音" to listOf("b" to "[b]ig jo[b]", "d" to "[d]ay re[d]", "g" to "[g]o bi[g]", "v" to "[v]ery fi[v]e",
+        "ð" to "[th]at [th]ey", "z" to "[z]oo hi[s]", "ʒ" to "u[s]ually televi[si]on", "dʒ" to "[j]ob lar[ge]",
+        "r" to "[r]ed [r]ight", "dr" to "[dr]ink [dr]y", "dz" to "besi[des] o[dds]"),
+    "鼻音和其他" to listOf("m" to "[m]e ti[m]e", "n" to "[n]o te[n]", "ŋ" to "si[ng] lo[ng]", "l" to "[l]ike a[ll]",
+        "j" to "[y]es [y]ou", "w" to "[w]e [w]ay"),
 )
 
 // shortcut: 没有单个音素的录音，只能点例词听这个音；有了音素音频再给音标本身加喇叭
 @Composable
 fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
     val phonetic by produceState(emptyMap<String, String?>()) {
-        val words = PHONETIC_GROUPS.flatMap { g -> g.second.flatMap { it.second.split(" ") } }.distinct()
+        val words = PHONETIC_GROUPS.flatMap { g -> g.second.flatMap { it.second.split(" ") } }.map { splitMark(it).word }.distinct()
         value = withContext(Dispatchers.IO) { db.words(words).associate { it.word to it.phonetic } }
     }
     Scaffold(containerColor = DuoWhite, contentWindowInsets = ZeroInsets, topBar = { TopBar(onBack) }) { pad ->
@@ -549,7 +554,7 @@ fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
         ) {
             item {
                 Text("音标表", fontSize = 28.sp, fontWeight = FontWeight.Black, color = DuoEel)
-                Text("48 个国际音标。点喇叭听例词，留意蓝色音标在词里的发音。", modifier = Modifier.padding(top = 4.dp),
+                Text("48 个国际音标。例词里标蓝的字母就读这个音，点喇叭听。", modifier = Modifier.padding(top = 4.dp),
                     color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 22.sp)
             }
             PHONETIC_GROUPS.forEach { (group, symbols) ->
@@ -561,8 +566,14 @@ fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("/$symbol/", modifier = Modifier.width(92.dp), color = DuoBlue, fontWeight = FontWeight.Black, fontSize = 26.sp)
                             Column(Modifier.weight(1f)) {
-                                words.split(" ").forEach { w ->
-                                    PronounceableWord(w, fontSize = 20.sp, lineHeight = 24.sp)
+                                words.split(" ").forEach { marked ->
+                                    val m = splitMark(marked)
+                                    val w = m.word
+                                    PronounceableWord(w, fontSize = 20.sp, lineHeight = 24.sp, text = buildAnnotatedString {
+                                        append(m.before)
+                                        withStyle(SpanStyle(color = DuoBlue, textDecoration = TextDecoration.Underline)) { append(m.sound) }
+                                        append(m.after)
+                                    })
                                     phonetic[w]?.let { Text("/$it/", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
                                 }
                             }

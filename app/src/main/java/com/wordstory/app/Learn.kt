@@ -113,3 +113,13 @@ class QuizSession(questions: List<Question>) {
         step++
     }
 }
+
+/** 音标表例词：s[ee] 拆成 s / ee / 空，方括号里是发这个音的字母 */
+data class MarkedWord(val before: String, val sound: String, val after: String) {
+    val word get() = before + sound + after
+}
+
+fun splitMark(s: String): MarkedWord {
+    val (a, b, c) = requireNotNull(Regex("""([a-z]*)\[([a-z]+)]([a-z]*)""").matchEntire(s)) { "bad mark: $s" }.destructured
+    return MarkedWord(a, b, c)
+}
