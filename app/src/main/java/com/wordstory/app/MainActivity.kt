@@ -74,6 +74,8 @@ sealed interface Screen {
     data class Detail(val word: String) : Screen
     data class Lesson(val info: LessonInfo) : Screen
     data object Review : Screen
+    data object Blitz : Screen
+    data object Phonetics : Screen
 }
 
 /** 首页的状态放在外面，从详情页返回时标签页、搜索词、列表位置都还在 */
@@ -123,6 +125,8 @@ fun App() {
             is Screen.Detail -> DetailScreen(r.words, s.word, onBack = pop)
             is Screen.Lesson -> LessonScreen(r, s.info, onExit = { refresh++; pop() })
             Screen.Review -> ReviewScreen(r, onExit = { refresh++; pop() })
+            Screen.Phonetics -> PhoneticsScreen(r.words, onBack = pop)
+            Screen.Blitz -> BlitzScreen(r, home.level, onExit = { refresh++; pop() })
         }
         lookupWord?.let { WordSheet(r.words, it) { lookupWord = null } }
     }

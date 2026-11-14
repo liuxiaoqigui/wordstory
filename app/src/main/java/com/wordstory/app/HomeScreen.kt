@@ -98,8 +98,8 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
                 if (s == null || list == null) LoadingBox(pad)
                 else LessonsTab(list, s.learned, st, pad) { open(Screen.Lesson(it)) }
             }
-            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, pad) { open(Screen.Review) }
-            else -> SearchTab(r.words, st, pad) { open(Screen.Detail(it)) }
+            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, r.prefs.getInt("blitz_best", 0), pad, onBlitz = { open(Screen.Blitz) }) { open(Screen.Review) }
+            else -> SearchTab(r.words, st, pad, onPhonetics = { open(Screen.Phonetics) }) { open(Screen.Detail(it)) }
         }
     }
 }
@@ -554,7 +554,7 @@ private fun rememberBob(): Dp {
 }
 
 @Composable
-private fun ReviewTab(s: Stats, pad: PaddingValues, onReview: () -> Unit) {
+private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () -> Unit, onReview: () -> Unit) {
     BoxWithConstraints(Modifier.padding(pad).fillMaxSize()) {
         Column(
             Modifier
@@ -597,6 +597,13 @@ private fun ReviewTab(s: Stats, pad: PaddingValues, onReview: () -> Unit) {
                 onClick = onReview,
                 enabled = s.due > 0,
             )
+            DuoButton(
+                "⚡ 闪电挑战" + if (blitzBest > 0) " · 最高 $blitzBest 题" else " · $BLITZ_SECONDS 秒能答对几题",
+                onClick = onBlitz,
+                modifier = Modifier.padding(top = 12.dp),
+                face = DuoYellow,
+                lip = DuoYellowLip,
+            )
         }
     }
 }
@@ -613,10 +620,14 @@ private fun StatTile(label: String, value: Int, color: androidx.compose.ui.graph
 }
 
 @Composable
-private fun SearchTab(db: WordDb, st: HomeState, pad: PaddingValues, onOpen: (String) -> Unit) {
+private fun SearchTab(db: WordDb, st: HomeState, pad: PaddingValues, onPhonetics: () -> Unit, onOpen: (String) -> Unit) {
     val results by produceState(emptyList<Word>(), st.query) { value = withContext(Dispatchers.IO) { db.search(st.query) } }
     Column(Modifier.padding(pad).consumeWindowInsets(pad).imePadding().fillMaxSize()) {
         SearchField(st.query) { st.query = it }
+        if (st.query.isBlank()) {
+            DuoButton("🔤 音标表 · 48 个国际音标", onPhonetics,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), face = DuoBlue, lip = DuoBlueDark)
+        }
         if (st.query.isNotBlank() && results.isEmpty()) {
             Text(
                 "词库里没有以「${st.query.trim()}」开头的词",

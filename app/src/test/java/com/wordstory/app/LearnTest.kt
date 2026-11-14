@@ -41,5 +41,7 @@ class LearnTest {
         assertEquals(1, s.firstTryCorrect)
         assertEquals(2, s.solved)
         assertEquals(3, s.step)
+        assertEquals(2, s.maxCombo)   // 错、对、对：答错清零，之后连对两题
+        assertEquals(2, s.combo)
     }
 }

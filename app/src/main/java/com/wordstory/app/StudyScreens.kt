@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +52,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -178,7 +182,7 @@ fun LessonScreen(r: Repo, info: LessonInfo, onExit: () -> Unit) {
     ) { pad ->
         when {
             words.isEmpty() -> Loading(pad)
-            xp != null -> Result(pad, "过关！", xp!!, s!!, onExit)
+            xp != null -> Result(pad, "过关！", xp!!, s!!.summary(), onExit)
             s != null -> QuizView(s, pad) {
                 val today = today()
                 val earned = LESSON_XP + s.firstTryCorrect
@@ -243,17 +247,40 @@ private fun QuizView(
         return
     }
     var picked by remember(s.step) { mutableStateOf<Int?>(null) }
+    var revealed by remember(s.step) { mutableStateOf(false) }   // 听音题：听不了时可以改看单词
+    val listening = q is MeaningQuestion && q.listen && picked == null && !revealed
+    val speech = LocalWordSpeech.current
+    LaunchedEffect(s.step) { if (listening) speech?.speak(q.word.word) }
     Column(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Prompt(if (q is ClozeQuestion) "选词填空" else "选出正确的意思")
+            Prompt(
+                when {
+                    q is ClozeQuestion -> "选词填空"
+                    q is PhoneticQuestion -> "看音标，选出单词"
+                    listening -> "听发音，选出意思"
+                    else -> "选出正确的意思"
+                },
+            )
             when (q) {
-                is MeaningQuestion -> {
+                is MeaningQuestion -> if (listening) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        DuoButton("🔊 再听一遍", onClick = { speech?.speak(q.word.word) }, modifier = Modifier.weight(1f), face = DuoBlue, lip = DuoBlueDark)
+                        Text("显示单词", modifier = Modifier.clickable { revealed = true }.padding(8.dp),
+                            color = DuoWolf, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                    }
+                } else {
                     PronounceableWord(q.word.word, fontSize = 36.sp, lineHeight = 40.sp)
                     q.word.phonetic?.let {
                         Text("/$it/", color = DuoBlue, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    }
+                }
+                is PhoneticQuestion -> {
+                    Text("/${q.word.phonetic}/", color = DuoBlue, fontWeight = FontWeight.Black, fontSize = 32.sp, lineHeight = 38.sp)
+                    if (picked != null) q.word.meaning?.let {
+                        Text(it, color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 22.sp)
                     }
                 }
                 is ClozeQuestion -> {
@@ -290,7 +317,7 @@ private fun QuizView(
             val ok = choice == q.answer
             FeedbackBar(
                 ok = ok,
-                title = if (ok) "太棒了！" else "正确答案",
+                title = if (!ok) "正确答案" else if (s.combo >= 3) "连对 ×${s.combo}！" else "太棒了！",
                 detail = if (ok) null else q.options[q.answer],
                 button = if (ok) "继续" else "知道了",
                 onClick = { s.next(ok) },
@@ -356,7 +383,10 @@ private fun FeedbackBar(ok: Boolean, title: String, detail: String?, button: Str
 }
 
 @Composable
-private fun Result(pad: PaddingValues, title: String, xp: Int, s: QuizSession, onExit: () -> Unit) {
+private fun QuizSession.summary() = "一次答对 $firstTryCorrect / $total" + if (maxCombo >= 3) " · 最高连对 $maxCombo" else ""
+
+@Composable
+private fun Result(pad: PaddingValues, title: String, xp: Int, detail: String, onExit: () -> Unit) {
     BoxWithConstraints(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize()) {
         Column(
             Modifier
@@ -378,7 +408,7 @@ private fun Result(pad: PaddingValues, title: String, xp: Int, s: QuizSession, o
             Text(title, modifier = Modifier.padding(top = 16.dp), fontSize = 32.sp, fontWeight = FontWeight.Black, color = DuoEel)
             Text("+$xp XP", modifier = Modifier.padding(top = 4.dp), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = DuoYellowDark)
             Text(
-                "一次答对 ${s.firstTryCorrect} / ${s.total}",
+                detail,
                 modifier = Modifier.padding(top = 8.dp, bottom = 28.dp),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
@@ -403,13 +433,133 @@ fun ReviewScreen(r: Repo, onExit: () -> Unit) {
     ) { pad ->
         when {
             s == null -> Loading(pad)
-            done -> Result(pad, "复习完成！", s.firstTryCorrect, s, onExit)
+            done -> Result(pad, "复习完成！", s.firstTryCorrect, s.summary(), onExit)
             // 每个词第一次作答就记进度和 XP，中途退出也不白复习
             else -> QuizView(s, pad, onFirstTry = { w, ok ->
                 val today = today()
                 r.user.review(w.word, ok, today)
                 if (ok) r.user.addXp(today, 1)
             }) { done = true }
+        }
+    }
+}
+
+/** 闪电挑战：限时选义，答对一题 1 XP，最高分记在设置里 */
+@Composable
+fun BlitzScreen(r: Repo, level: Int, onExit: () -> Unit) {
+    val questions by produceState<List<Question>?>(null) {
+        value = withContext(Dispatchers.IO) {
+            r.words.randomWords(level, 60).mapNotNull { buildQuestion(r.words, it, preferCloze = false) }
+        }
+    }
+    val best = remember { r.prefs.getInt("blitz_best", 0) }
+    var index by remember { mutableIntStateOf(0) }
+    var score by remember { mutableIntStateOf(0) }
+    var left by remember { mutableIntStateOf(BLITZ_SECONDS) }
+    var picked by remember(index) { mutableStateOf<Int?>(null) }
+    val qs = questions
+    val over = qs != null && (left == 0 || index >= qs.size)
+    LaunchedEffect(qs != null) { if (qs != null) while (left > 0) { delay(1000); left-- } }
+    LaunchedEffect(over) {
+        if (over && score > 0) {
+            r.user.addXp(today(), score)
+            if (score > best) r.prefs.edit().putInt("blitz_best", score).apply()
+        }
+    }
+    // 答对很快跳下一题；答错多停一会儿，看清正确答案
+    LaunchedEffect(picked) { picked?.let { delay(if (it == qs!![index].answer) 250 else 1000); index++ } }
+    Scaffold(
+        containerColor = DuoWhite,
+        contentWindowInsets = ZeroInsets,
+        topBar = { TopBar(onExit, closeAsX = true, left.toFloat() / BLITZ_SECONDS) },
+    ) { pad ->
+        when {
+            qs == null -> Loading(pad)
+            over -> Result(pad, if (score > best) "新纪录！" else "时间到！", score,
+                "答对 $score 题 · 最高纪录 ${maxOf(score, best)} 题", onExit)
+            else -> {
+                val q = qs[index]
+                Column(
+                    Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().verticalScroll(rememberScrollState())
+                        .navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("⏱ $left 秒", color = DuoWolf, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        Text("⚡ $score", color = DuoYellowDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    }
+                    Text(q.word.word, fontSize = 36.sp, lineHeight = 40.sp, fontWeight = FontWeight.Black, color = DuoEel)
+                    q.options.forEachIndexed { i, option ->
+                        val tone = when {
+                            picked == null -> ChoiceTone.Idle
+                            i == q.answer -> ChoiceTone.Correct
+                            i == picked -> ChoiceTone.Wrong
+                            else -> ChoiceTone.Dim
+                        }
+                        DuoChoice(option, tone) {
+                            if (picked == null) {
+                                picked = i
+                                if (i == q.answer) score++
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 课本上的 48 个国际音标，每个配两个词库里的例词 */
+val PHONETIC_GROUPS: List<Pair<String, List<Pair<String, String>>>> = listOf(
+    "长元音" to listOf("iː" to "see tea", "ɜː" to "her first", "ɑː" to "car father", "ɔː" to "all more", "uː" to "do blue"),
+    "短元音" to listOf("i" to "sit big", "e" to "get red", "æ" to "cat and", "ʌ" to "up but", "ɒ" to "not hot",
+        "u" to "good book", "ə" to "about ago"),
+    "双元音" to listOf("ei" to "say make", "ai" to "my time", "ɔi" to "boy voice", "əu" to "go know", "au" to "now out",
+        "iə" to "here year", "eə" to "air there", "uə" to "sure poor"),
+    "清辅音" to listOf("p" to "pen map", "t" to "ten two", "k" to "key book", "f" to "five life", "θ" to "think three",
+        "s" to "see bus", "ʃ" to "she fish", "tʃ" to "child much", "h" to "he home", "tr" to "tree try", "ts" to "its pants"),
+    "浊辅音" to listOf("b" to "big job", "d" to "day red", "g" to "go big", "v" to "very five", "ð" to "that they",
+        "z" to "zoo his", "ʒ" to "usually television", "dʒ" to "job large", "r" to "red right", "dr" to "drink dry",
+        "dz" to "besides odds"),
+    "鼻音和其他" to listOf("m" to "me time", "n" to "no ten", "ŋ" to "sing long", "l" to "like all", "j" to "yes you", "w" to "we way"),
+)
+
+// shortcut: 没有单个音素的录音，只能点例词听这个音；有了音素音频再给音标本身加喇叭
+@Composable
+fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
+    val phonetic by produceState(emptyMap<String, String?>()) {
+        val words = PHONETIC_GROUPS.flatMap { g -> g.second.flatMap { it.second.split(" ") } }.distinct()
+        value = withContext(Dispatchers.IO) { db.words(words).associate { it.word to it.phonetic } }
+    }
+    Scaffold(containerColor = DuoWhite, contentWindowInsets = ZeroInsets, topBar = { TopBar(onBack) }) { pad ->
+        LazyColumn(
+            Modifier.padding(top = pad.calculateTopPadding()).navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                Text("音标表", fontSize = 28.sp, fontWeight = FontWeight.Black, color = DuoEel)
+                Text("48 个国际音标。点喇叭听例词，留意蓝色音标在词里的发音。", modifier = Modifier.padding(top = 4.dp),
+                    color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 22.sp)
+            }
+            PHONETIC_GROUPS.forEach { (group, symbols) ->
+                item(key = group) {
+                    Text(group, modifier = Modifier.padding(top = 8.dp), color = DuoGreenDark, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                }
+                items(symbols, key = { it.first }) { (symbol, words) ->
+                    DuoCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("/$symbol/", modifier = Modifier.width(92.dp), color = DuoBlue, fontWeight = FontWeight.Black, fontSize = 26.sp)
+                            Column(Modifier.weight(1f)) {
+                                words.split(" ").forEach { w ->
+                                    PronounceableWord(w, fontSize = 20.sp, lineHeight = 24.sp)
+                                    phonetic[w]?.let { Text("/$it/", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

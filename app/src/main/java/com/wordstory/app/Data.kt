@@ -105,6 +105,12 @@ class WordDb(context: Context) {
         map.map { (lesson, v) -> LessonInfo(lesson, v.first, v.second) }
     }
 
+    /** 闪电挑战的题目：某个难度里随机抽有释义的词 */
+    fun randomWords(level: Int, n: Int): List<Word> = query(
+        "SELECT $COLS FROM words WHERE lesson > 0 AND level = ? AND meaning IS NOT NULL ORDER BY random() LIMIT ?",
+        level.toString(), n.toString(),
+    )
+
     fun distractorWords(w: Word, n: Int) = pick("word", w, n)
     fun distractorMeanings(w: Word, n: Int) = pick("meaning", w, n)
 

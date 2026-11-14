@@ -25,6 +25,16 @@ LIST_ITEM = re.compile(r"^\s*(?:\d+[.)、]|•)\s*")
 STRIP = " \t-—–:：/|\"'“”‘’()（）[]【】"
 # ECDICT 音标用西里尔字母 ә 和 ASCII 重音/长音符号，换成标准 IPA
 IPA = str.maketrans({"ә": "ə", "'": "ˈ", ",": "ˌ", ":": "ː"})
+# ECDICT 的几种写法和课本上的国际音标不一样（for 写成 fɒː、her 写成 həː、go 有时写成 ^əu），统一成课本写法
+IPA_FIX = [("ɒː", "ɔː"), ("ɒi", "ɔi"), ("є", "e"), ("əː", "ɜː"), ("^", "g"), ("ou", "əu"), ("ɪ", "i"), ("ʊ", "u")]
+
+
+def ipa(s):
+    """ECDICT 音标 -> 课本写法的国际音标；开头的 . 是次重音。没有音标返回 None。"""
+    s = (s or "").translate(IPA)
+    for a, b in IPA_FIX:
+        s = s.replace(a, b)
+    return re.sub(r"^\.", "ˌ", s) or None
 # 词频排名上限：入门 1000、简单 3000、中等 6000、困难 12000，更靠后或没有词频的是地狱
 LEVEL_CUTS = [1000, 3000, 6000, 12000]
 
@@ -192,7 +202,7 @@ def build_lookup(rows, lower):
             row = lower.get(head) or ec
             meaning = short_meaning(row.get("translation") or "") if row else None
             if meaning:
-                out[tok] = (row["word"], (row.get("phonetic") or "").translate(IPA) or None, meaning, None)
+                out[tok] = (row["word"], ipa(row.get("phonetic")), meaning, None)
     return out
 
 
@@ -230,7 +240,7 @@ def main(gpt_path, ecdict_path, out_path):
         examples = parse_examples(by_title.get("列举例句", ""), forms) or \
             parse_examples(by_title.get("", ""), forms, list_only=True)
         meaning = short_meaning(ec.get("translation") or "")
-        rows.append(dict(word=word, phonetic=(ec.get("phonetic") or "").translate(IPA) or None, meaning=meaning,
+        rows.append(dict(word=word, phonetic=ipa(ec.get("phonetic")), meaning=meaning,
                          pos=pos_of(meaning), level=level_of(ec), rank=rank_of(ec), sections=secs, examples=examples))
 
     rows.sort(key=lambda r: (r["level"], r["rank"], r["word"].lower()))
@@ -322,7 +332,9 @@ def self_check():
     assert lk["spiders"] == ("spider", "ˈspaidə", "n. 蜘蛛", "spider"), lk["spiders"]
     assert lk["went"] == ("go", "gəu", "v. 去", None), lk["went"]
     assert lk["he"] == ("he", "hiː", "pron. 他", None) and "he's" not in lk and "xyzzy" not in lk, lk
-    assert "ә'bænd:".translate(IPA) == "əˈbændː"
+    assert ipa("ә'bænd:") == "əˈbændː" and ipa("") is None
+    assert ipa("fɒ:") == "fɔː" and ipa("bɒi") == "bɔi" and ipa("ðєə") == "ðeə" and ipa("hə:") == "hɜː"
+    assert ipa("^ɔd") == "gɔd" and ipa(".infə'meiʃən") == "ˌinfəˈmeiʃən" and ipa("nɒt") == "nɒt"
     # 难度：两个词频取更常用的；边界值归低一级；牛津核心词至多简单；没有词频是地狱
     assert level_of({"frq": "1000", "bnc": "5000"}) == 1 and level_of({"frq": "0", "bnc": "1001"}) == 2
     assert level_of({"frq": "12000"}) == 4 and level_of({"frq": "12001"}) == 5 and level_of({}) == 5
