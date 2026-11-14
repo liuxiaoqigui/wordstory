@@ -4,7 +4,7 @@
 
 ## 功能
 
-- **闯关**：8027 个单词，其中 7954 个分成 798 关，每关 10 个词，按难度分为 入门 / 简单 / 困难 / 地狱 / 其他。每关先看学习卡片，再做测验（选出正确的意思、选词填空）。答错的题会放回队尾，全部答对才过关。
+- **闯关**：8027 个单词，其中 7954 个分成 798 关，每关 10 个词，按词频分为 入门 / 简单 / 中等 / 困难 / 地狱 五个难度。每关先看学习卡片，再做测验（选出正确的意思、选词填空）。答错的题会放回队尾，全部答对才过关。
 - **复习**：用盒子法安排间隔重复。答对升一格，复习间隔依次为 1、2、4、7、15 天，再答对就算掌握；答错回到第一格。
 - **查词**：输入前缀搜索，查看完整的单词故事。
 - **点词查词**：例句、填空题和故事里的英文单词下面有虚线，点一下弹出原形、音标和释义（spiders → spider，went → go），书里有的词还能接着看故事。
@@ -14,17 +14,17 @@
 
 ### 等级说明
 
-等级来自 ECDICT 的考试标签。一个词同时属于多个考试时，取最低的一级。
+等级按 ECDICT 里的词频排名划分。COCA 和 BNC 两个语料库的排名取更靠前的那个。牛津 3000 核心词（如 lazy、luggage）词频不一定高，但很基础，所以最多算“简单”。
 
-| App 里的等级 | 对应考试 |
-|---|---|
-| 入门 | 中考 |
-| 简单 | 高考 |
-| 困难 | 大学英语四级 |
-| 地狱 | 大学英语六级 |
-| 其他 | 不在以上四类里 |
+| App 里的等级 | 词频排名 | 词数 | 关数 |
+|---|---|---|---|
+| 入门 | 前 1000 | 1112 | 108 |
+| 简单 | 1001–3000，以及更靠后的牛津 3000 核心词 | 2513 | 250 |
+| 中等 | 3001–6000 | 1754 | 175 |
+| 困难 | 6001–12000 | 1758 | 176 |
+| 地狱 | 12000 以后，或没有词频（缩写、专有名词等） | 890 | 89 |
 
-同一级里按词频排序，常用词在前。每一级的第一关直接开放，之后要先学完上一关。
+词数包括只供查词、不进关卡的大小写重复词条。同一级里按词频排序，常用词在前。每一级的第一关直接开放，之后要先学完上一关。分级规则在 `tools/build_db.py` 的 `level_of` 里。
 
 ## 构建和安装
 
@@ -101,7 +101,7 @@ python3 -I tools/build_db.py gptwords.json ecdict.csv app/src/main/assets/words.
 - `EdgeToken.kt` 改编自 [rany2/edge-tts](https://github.com/rany2/edge-tts) 7.3.1 的 `drm.py`，沿用 LGPLv3，许可文本随 APK 打包在 `assets/licenses/`。该文件的 Kotlin 源码随本项目提供。详见 [设计说明](DESIGN.md)。
 
 - 单词故事来自 [Ceelog/DictionaryByGPT4](https://github.com/Ceelog/DictionaryByGPT4)（威威的 GPT 单词本），许可为 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)。`words.db` 由它重新整理而来（切分小节、抽取例句、合并音标和释义），因此 `words.db` 同样以 CC BY-SA 4.0 发布。
-- 音标、释义、考试标签和词形变化来自 [skywind3000/ECDICT](https://github.com/skywind3000/ECDICT)，MIT 许可，见 [licenses/ECDICT-MIT.txt](licenses/ECDICT-MIT.txt)。
+- 音标、释义、词频、牛津 3000 标记和词形变化来自 [skywind3000/ECDICT](https://github.com/skywind3000/ECDICT)，MIT 许可，见 [licenses/ECDICT-MIT.txt](licenses/ECDICT-MIT.txt)。
 - 字体为 [Nunito](https://github.com/googlefonts/nunito)，SIL Open Font License 1.1，见 [licenses/OFL-Nunito.txt](licenses/OFL-Nunito.txt)。
 
 单词故事由 GPT-4 生成，可能有错。例如 AD 只解释了“广告”，没有提到“公元”。

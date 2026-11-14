@@ -2,7 +2,7 @@
 
 用法: python3 -I build_db.py gptwords.json ecdict.csv ../app/src/main/assets/words.db
 """
-import csv, json, os, re, sqlite3, sys
+import bisect, csv, json, os, re, sqlite3, sys
 
 # 标题关键字 -> 统一的小节名。按顺序匹配："单词发展历史和文化背景"先命中"历史"，"词根词缀分析"先命中"词根"。
 KEYWORDS = [("故事", "小故事"), ("记忆", "记忆辅助"), ("历史", "发展历史和文化背景"), ("文化", "发展历史和文化背景"),
@@ -25,7 +25,19 @@ LIST_ITEM = re.compile(r"^\s*(?:\d+[.)、]|•)\s*")
 STRIP = " \t-—–:：/|\"'“”‘’()（）[]【】"
 # ECDICT 音标用西里尔字母 ә 和 ASCII 重音/长音符号，换成标准 IPA
 IPA = str.maketrans({"ә": "ə", "'": "ˈ", ",": "ˌ", ":": "ː"})
-LEVEL_TAGS = [("zk", 1), ("gk", 2), ("cet4", 3), ("cet6", 4)]  # 其他 = 5
+# 词频排名上限：入门 1000、简单 3000、中等 6000、困难 12000，更靠后或没有词频的是地狱
+LEVEL_CUTS = [1000, 3000, 6000, 12000]
+
+
+def rank_of(ec):
+    """COCA(frq) 和 BNC 词频排名取更常用的那个；两个都没有排最后。"""
+    return min([r for r in (int(ec.get("frq") or 0), int(ec.get("bnc") or 0)) if r] or [10 ** 9])
+
+
+def level_of(ec):
+    """按词频分 1-5 级；牛津 3000 核心词（lazy、luggage 这类词频不高但很基础的）至多算简单。"""
+    level = bisect.bisect_left(LEVEL_CUTS, rank_of(ec)) + 1
+    return min(level, 2) if ec.get("oxford") == "1" else level
 
 
 def heading(line):
@@ -218,13 +230,10 @@ def main(gpt_path, ecdict_path, out_path):
         examples = parse_examples(by_title.get("列举例句", ""), forms) or \
             parse_examples(by_title.get("", ""), forms, list_only=True)
         meaning = short_meaning(ec.get("translation") or "")
-        tags = (ec.get("tag") or "").split()
-        level = min([lv for t, lv in LEVEL_TAGS if t in tags] or [5])
-        frq = int(ec.get("frq") or 0) or 10 ** 9   # 0 = 没有词频，排最后
         rows.append(dict(word=word, phonetic=(ec.get("phonetic") or "").translate(IPA) or None, meaning=meaning,
-                         pos=pos_of(meaning), level=level, frq=frq, sections=secs, examples=examples))
+                         pos=pos_of(meaning), level=level_of(ec), rank=rank_of(ec), sections=secs, examples=examples))
 
-    rows.sort(key=lambda r: (r["level"], r["frq"], r["word"].lower()))
+    rows.sort(key=lambda r: (r["level"], r["rank"], r["word"].lower()))
     # 原书把句首大写形式也收成了单独词条（About/about、In/in、IT/it）。小写形式存在时，大写的只留给查词，
     # 不进关卡：lesson=0。March（三月）这种大写另有含义的也照此处理，故事在查词里照样能看到。
     lower_words = {r["word"] for r in rows if r["word"] == r["word"].lower()}
@@ -314,6 +323,10 @@ def self_check():
     assert lk["went"] == ("go", "gəu", "v. 去", None), lk["went"]
     assert lk["he"] == ("he", "hiː", "pron. 他", None) and "he's" not in lk and "xyzzy" not in lk, lk
     assert "ә'bænd:".translate(IPA) == "əˈbændː"
+    # 难度：两个词频取更常用的；边界值归低一级；牛津核心词至多简单；没有词频是地狱
+    assert level_of({"frq": "1000", "bnc": "5000"}) == 1 and level_of({"frq": "0", "bnc": "1001"}) == 2
+    assert level_of({"frq": "12000"}) == 4 and level_of({"frq": "12001"}) == 5 and level_of({}) == 5
+    assert level_of({"frq": "9000", "oxford": "1"}) == 2 and level_of({"frq": "500", "oxford": "1"}) == 1
 
 
 if __name__ == "__main__":

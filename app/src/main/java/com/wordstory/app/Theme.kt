@@ -72,8 +72,8 @@ fun levelPalette(level: Int) = when (level) {
     1 -> LevelPalette(DuoGreen, DuoGreenDark)
     2 -> LevelPalette(DuoBlue, DuoBlueDark)
     3 -> LevelPalette(DuoPurple, DuoPurpleDark)
-    4 -> LevelPalette(DuoRed, DuoRedDark)
-    else -> LevelPalette(DuoOrange, DuoOrangeDark)
+    4 -> LevelPalette(DuoOrange, DuoOrangeDark)
+    else -> LevelPalette(DuoRed, DuoRedDark)
 }
 
 val Nunito = FontFamily(

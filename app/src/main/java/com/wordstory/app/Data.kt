@@ -6,9 +6,10 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 import java.io.File
 
-// 分级来自 ECDICT 的考试标签：1 中考、2 高考、3 四级、4 六级、5 不在这四类里
-val LEVEL_NAMES = mapOf(1 to "入门", 2 to "简单", 3 to "困难", 4 to "地狱", 5 to "其他")
-val LEVEL_HINTS = mapOf(1 to "中考词汇", 2 to "高考词汇", 3 to "四级词汇", 4 to "六级词汇", 5 to "考试大纲以外的词")
+// 分级按词频排名（规则见 tools/build_db.py 的 level_of）
+val LEVEL_NAMES = mapOf(1 to "入门", 2 to "简单", 3 to "中等", 4 to "困难", 5 to "地狱")
+val LEVEL_HINTS = mapOf(1 to "最常用的 1000 词", 2 to "常用 1000–3000 词和基础核心词", 3 to "常用 3000–6000 词",
+    4 to "常用 6000–12000 词", 5 to "少见词、缩写和专有名词")
 
 data class Example(val en: String, val zh: String, val blank: String)
 
