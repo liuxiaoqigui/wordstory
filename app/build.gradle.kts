@@ -15,8 +15,8 @@ android {
         applicationId = "com.wordstory.app"
         minSdk = 26   // java.time
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     buildTypes {
