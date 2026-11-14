@@ -581,11 +581,11 @@ private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, open: (Scree
             verticalArrangement = Arrangement.Center,
         ) {
             Box(Modifier.size(104.dp)) {
-                Box(Modifier.fillMaxSize().background(DuoBlueDark, CircleShape))
+                Box(Modifier.fillMaxSize().background(DuoBlue, CircleShape))
                 Box(
-                    Modifier.fillMaxSize().padding(bottom = 6.dp).background(DuoBlue, CircleShape),
+                    Modifier.fillMaxSize().padding(bottom = 6.dp).background(androidx.compose.ui.graphics.Color(0xFFDDF4FF), CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Text("🔁", fontSize = 42.sp) }
+                ) { Image(painterResource(R.drawable.tab_review), contentDescription = null, modifier = Modifier.size(76.dp)) }
             }
             Text("今天待复习", modifier = Modifier.padding(top = 18.dp), fontWeight = FontWeight.ExtraBold, color = DuoWolf, fontSize = 16.sp)
             Text("${s.due}", fontWeight = FontWeight.Black, fontSize = 64.sp, color = DuoEel, lineHeight = 68.sp)
