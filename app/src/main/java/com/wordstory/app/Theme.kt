@@ -207,6 +207,13 @@ fun DuoButton(
     }
 }
 
+/** 厚底卡片，内容自己摆：小游戏入口和配对卡片用 */
+@Composable
+fun DuoTile(
+    face: Color, lip: Color, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, fixed: Boolean = false, content: @Composable BoxScope.() -> Unit,
+) = LipBox(modifier, face, lip, enabled, onClick, outline = true, fixed = fixed, content = content)
+
 enum class ChoiceTone { Idle, Selected, Correct, Wrong, Dim }
 
 @Composable

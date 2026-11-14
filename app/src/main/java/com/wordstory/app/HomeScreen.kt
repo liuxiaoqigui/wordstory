@@ -1,5 +1,12 @@
 package com.wordstory.app
 
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -155,43 +162,48 @@ private fun Header(s: Stats) {
     }
 }
 
-private data class TabSpec(val icon: String, val label: String, val color: androidx.compose.ui.graphics.Color)
+private data class TabSpec(val icon: Int, val label: String, val color: androidx.compose.ui.graphics.Color)
 
 @Composable
 private fun DuoNav(selected: Int, onSelect: (Int) -> Unit) {
     val tabs = listOf(
-        TabSpec("📚", "学习", DuoGreen),
-        TabSpec("🔁", "复习", DuoBlue),
-        TabSpec("🔍", "查词", DuoPurple),
+        TabSpec(R.drawable.tab_learn, "学习", DuoGreen),
+        TabSpec(R.drawable.tab_review, "复习", DuoBlue),
+        TabSpec(R.drawable.tab_search, "查词", DuoPurple),
     )
     Column(Modifier.background(DuoWhite).navigationBarsPadding()) {
         HorizontalDivider(thickness = 2.dp, color = DuoSwan)
-        Row(Modifier.fillMaxWidth().height(64.dp)) {
+        Row(Modifier.fillMaxWidth().height(76.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             tabs.forEachIndexed { i, tab ->
                 val on = selected == i
-                Column(
+                // 选中时图标弹一下
+                val scale by animateFloatAsState(if (on) 1.15f else 1f, spring(dampingRatio = 0.35f), label = "tab")
+                val shape = RoundedCornerShape(16.dp)
+                Row(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .clip(shape)
+                        .background(if (on) tab.color.copy(alpha = 0.14f) else DuoWhite)
+                        .border(2.dp, if (on) tab.color else DuoWhite, shape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
+                            role = Role.Tab,
                             onClick = { onSelect(i) },
                         ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        Modifier
-                            .size(34.dp)
-                            .background(if (on) tab.color.copy(alpha = 0.16f) else DuoWhite, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(tab.icon, fontSize = 18.sp) }
+                    Image(painterResource(tab.icon), contentDescription = null, alpha = if (on) 1f else 0.55f,
+                        modifier = Modifier.size(40.dp).graphicsLayer { scaleX = scale; scaleY = scale })
                     Text(
                         tab.label,
+                        modifier = Modifier.padding(start = 8.dp),
                         color = if (on) tab.color else DuoHare,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
                     )
                 }
             }
@@ -597,15 +609,30 @@ private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () 
                 onClick = onReview,
                 enabled = s.due > 0,
             )
-            DuoButton(
-                "⚡ 闪电挑战" + if (blitzBest > 0) " · 最高 $blitzBest 题" else " · $BLITZ_SECONDS 秒能答对几题",
-                onClick = onBlitz,
-                modifier = Modifier.padding(top = 12.dp),
-                face = DuoYellow,
-                lip = DuoYellowLip,
-            )
-            DuoButton("🧩 单词配对", onClick = onMatch, modifier = Modifier.padding(top = 12.dp), face = DuoPurple, lip = DuoPurpleDark)
-            DuoButton("✍️ 中译英 · 看中文写单词", onClick = onSpell, modifier = Modifier.padding(top = 12.dp), face = DuoBlue, lip = DuoBlueDark)
+            Text("小游戏", modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp),
+                fontWeight = FontWeight.Black, fontSize = 18.sp, color = DuoEel)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GameTile("⚡", "闪电挑战", if (blitzBest > 0) "最高 $blitzBest 题" else "$BLITZ_SECONDS 秒抢答", DuoYellow, DuoYellowLip, DuoEel, onBlitz)
+                GameTile("🧩", "单词配对", "连连看", DuoPurple, DuoPurpleDark, DuoWhite, onMatch)
+                GameTile("✍️", "中译英", "看中文写单词", DuoBlue, DuoBlueDark, DuoWhite, onSpell)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.GameTile(
+    icon: String, title: String, sub: String, face: androidx.compose.ui.graphics.Color,
+    lip: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color, onClick: () -> Unit,
+) {
+    DuoTile(face, lip, onClick, Modifier.weight(1f).height(132.dp), fixed = true) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // 图标垫一块白底圆，像贴纸
+            Box(Modifier.size(52.dp).background(DuoWhite.copy(alpha = 0.9f), CircleShape), contentAlignment = Alignment.Center) {
+                Text(icon, fontSize = 28.sp)
+            }
+            Text(title, modifier = Modifier.padding(top = 8.dp), color = fg, fontWeight = FontWeight.Black, fontSize = 15.sp, maxLines = 1)
+            Text(sub, color = fg.copy(alpha = 0.85f), fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
         }
     }
 }

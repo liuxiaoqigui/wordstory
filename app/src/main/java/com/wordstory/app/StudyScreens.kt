@@ -1,5 +1,11 @@
 package com.wordstory.app
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -338,14 +344,14 @@ private fun QuizView(
 }
 
 @Composable
-private fun Prompt(text: String) {
+private fun Prompt(text: String, face: String = "🦉") {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(68.dp)) {
             Box(Modifier.fillMaxSize().background(DuoGreenDark, CircleShape))
             Box(
                 Modifier.fillMaxSize().padding(bottom = 4.dp).background(DuoGreen, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { Text("🦉", fontSize = 32.sp) }
+            ) { Text(face, fontSize = 32.sp) }
         }
         Text(
             text,
@@ -598,6 +604,7 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
     var left by remember(round) { mutableStateOf<Int?>(null) }
     var right by remember(round) { mutableStateOf<Int?>(null) }
     var wrong by remember(round) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var cheer by remember(round) { mutableStateOf(false) }   // 刚配对成功，猫头鹰庆祝一下
     val scope = rememberCoroutineScope()
     val all = rounds
     val over = all != null && round >= all.size
@@ -619,9 +626,11 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
                     left = null; right = null
                     if (words[l].word == meanings[m].word) {
                         matched = matched + words[l].word
+                        cheer = true
                         if (words.all { it.word in matched }) scope.launch { delay(500); round++ }
                     } else {
                         mistakes++
+                        cheer = false
                         wrong = l to m
                         scope.launch { delay(600); wrong = null }
                     }
@@ -631,9 +640,16 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
                         .navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Prompt("把单词和意思配成对")
+                    when {
+                        wrong != null -> Prompt("不对哦，再试试！", "🙈")
+                        cheer -> Prompt("配对成功，真棒！", "🥳")
+                        else -> Prompt("把单词和意思配成对")
+                    }
+                    val done = words.count { it.word in matched }
+                    Text("⭐".repeat(done) + "☆".repeat(words.size - done), modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center, fontSize = 26.sp, color = DuoHare)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(2f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(2f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             words.forEachIndexed { i, w ->
                                 val tone = when {
                                     w.word in matched -> ChoiceTone.Correct
@@ -641,10 +657,11 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
                                     left == i -> ChoiceTone.Selected
                                     else -> ChoiceTone.Idle
                                 }
-                                DuoChoice(w.word, tone) { if (wrong == null) { left = if (left == i) null else i; check() } }
+                                val (face, lip) = MatchCandy[i % MatchCandy.size]
+                                MatchCard(w.word, tone, face, lip, DuoWhite) { if (wrong == null) { left = if (left == i) null else i; check() } }
                             }
                         }
-                        Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             meanings.forEachIndexed { i, w ->
                                 val tone = when {
                                     w.word in matched -> ChoiceTone.Correct
@@ -652,13 +669,52 @@ fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
                                     right == i -> ChoiceTone.Selected
                                     else -> ChoiceTone.Idle
                                 }
-                                DuoChoice(w.meaning ?: "", tone) { if (wrong == null) { right = if (right == i) null else i; check() } }
+                                MatchCard(w.meaning ?: "", tone, DuoWhite, DuoSwan, DuoEel) { if (wrong == null) { right = if (right == i) null else i; check() } }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// 单词卡每张一个糖果色
+private val MatchCandy = listOf(
+    DuoGreen to DuoGreenDark, DuoBlue to DuoBlueDark, DuoPurple to DuoPurpleDark,
+    DuoOrange to DuoOrangeDark, Color(0xFFFF86D0) to Color(0xFFE05FB0),
+)
+
+/** 配对卡片：选中变黄并放大，配对成功缩一下变绿，配错左右抖 */
+@Composable
+private fun MatchCard(text: String, tone: ChoiceTone, face: Color, lip: Color, fg: Color, onClick: () -> Unit) {
+    val scale by animateFloatAsState(
+        when (tone) { ChoiceTone.Selected -> 1.06f; ChoiceTone.Correct -> 0.94f; else -> 1f },
+        spring(dampingRatio = 0.35f), label = "pop",
+    )
+    val shake = remember { Animatable(0f) }
+    LaunchedEffect(tone) {
+        if (tone == ChoiceTone.Wrong) {
+            repeat(3) { shake.animateTo(8f, tween(40)); shake.animateTo(-8f, tween(40)) }
+            shake.animateTo(0f, tween(40))
+        }
+    }
+    val (f, l, c) = when (tone) {
+        ChoiceTone.Selected -> Triple(DuoYellow, DuoYellowLip, DuoEel)
+        ChoiceTone.Correct -> Triple(DuoGreenSoft, DuoGreen, DuoGreenDark)
+        ChoiceTone.Wrong -> Triple(DuoRedSoft, DuoRed, DuoRedDark)
+        else -> Triple(face, lip, fg)
+    }
+    DuoTile(
+        f, l, onClick,
+        Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale; translationX = shake.value.dp.toPx() },
+        enabled = tone == ChoiceTone.Idle || tone == ChoiceTone.Selected,   // 选中的可以再点一下取消
+    ) {
+        Text(
+            if (tone == ChoiceTone.Correct) "⭐ $text" else text,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
+            color = c, fontWeight = FontWeight.Black, fontSize = 17.sp, textAlign = TextAlign.Center, lineHeight = 22.sp,
+        )
     }
 }
 
