@@ -207,23 +207,26 @@ fun DuoButton(
     }
 }
 
-enum class ChoiceTone { Idle, Correct, Wrong, Dim }
+enum class ChoiceTone { Idle, Selected, Correct, Wrong, Dim }
 
 @Composable
 fun DuoChoice(text: String, tone: ChoiceTone, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val face = when (tone) {
         ChoiceTone.Idle -> DuoWhite
+        ChoiceTone.Selected -> Color(0xFFDDF4FF)
         ChoiceTone.Correct -> DuoGreenSoft
         ChoiceTone.Wrong -> DuoRedSoft
         ChoiceTone.Dim -> DuoPolar
     }
     val lip = when (tone) {
+        ChoiceTone.Selected -> DuoBlue
         ChoiceTone.Correct -> DuoGreen
         ChoiceTone.Wrong -> DuoRed
         else -> DuoSwan
     }
     val fg = when (tone) {
         ChoiceTone.Idle -> DuoEel
+        ChoiceTone.Selected -> DuoBlueDark
         ChoiceTone.Correct -> DuoGreenDark
         ChoiceTone.Wrong -> DuoRedDark
         ChoiceTone.Dim -> DuoHare
@@ -232,7 +235,7 @@ fun DuoChoice(text: String, tone: ChoiceTone, modifier: Modifier = Modifier, onC
         modifier = modifier.fillMaxWidth(),
         face = face,
         lip = lip,
-        enabled = tone == ChoiceTone.Idle,
+        enabled = tone == ChoiceTone.Idle || tone == ChoiceTone.Selected,   // 选中的可以再点一下取消
         onClick = onClick,
         outline = true,
         fixed = false,

@@ -19,6 +19,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -557,6 +567,153 @@ fun PhoneticsScreen(db: WordDb, onBack: () -> Unit) {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 单词配对：左边单词、右边意思，各点一个配成对；每轮 5 对，共两轮 */
+@Composable
+fun MatchScreen(r: Repo, level: Int, onExit: () -> Unit) {
+    val rounds by produceState<List<List<Word>>?>(null) {
+        // 意思相同的词只留一个，免得一个意思能配两个词
+        value = withContext(Dispatchers.IO) { r.words.randomWords(level, 10).distinctBy { it.meaning }.chunked(5) }
+    }
+    var round by remember { mutableIntStateOf(0) }
+    var mistakes by remember { mutableIntStateOf(0) }
+    var matched by remember { mutableStateOf(emptySet<String>()) }   // 已配好的词，跨轮累计
+    var left by remember(round) { mutableStateOf<Int?>(null) }
+    var right by remember(round) { mutableStateOf<Int?>(null) }
+    var wrong by remember(round) { mutableStateOf<Pair<Int, Int>?>(null) }
+    val scope = rememberCoroutineScope()
+    val all = rounds
+    val over = all != null && round >= all.size
+    LaunchedEffect(over) { if (over) r.user.addXp(today(), MATCH_XP) }
+    Scaffold(
+        containerColor = DuoWhite,
+        contentWindowInsets = ZeroInsets,
+        topBar = { TopBar(onExit, closeAsX = true, all?.let { matched.size.toFloat() / it.sumOf { w -> w.size }.coerceAtLeast(1) }) },
+    ) { pad ->
+        when {
+            all == null -> Loading(pad)
+            over -> Result(pad, "配对完成！", MATCH_XP, "配对 ${matched.size} 组 · 配错 $mistakes 次", onExit)
+            else -> {
+                val words = all[round]
+                val meanings = remember(round) { words.shuffled() }
+                fun check() {
+                    val l = left ?: return
+                    val m = right ?: return
+                    left = null; right = null
+                    if (words[l].word == meanings[m].word) {
+                        matched = matched + words[l].word
+                        if (words.all { it.word in matched }) scope.launch { delay(500); round++ }
+                    } else {
+                        mistakes++
+                        wrong = l to m
+                        scope.launch { delay(600); wrong = null }
+                    }
+                }
+                Column(
+                    Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().verticalScroll(rememberScrollState())
+                        .navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Prompt("把单词和意思配成对")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(2f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            words.forEachIndexed { i, w ->
+                                val tone = when {
+                                    w.word in matched -> ChoiceTone.Correct
+                                    wrong?.first == i -> ChoiceTone.Wrong
+                                    left == i -> ChoiceTone.Selected
+                                    else -> ChoiceTone.Idle
+                                }
+                                DuoChoice(w.word, tone) { if (wrong == null) { left = if (left == i) null else i; check() } }
+                            }
+                        }
+                        Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            meanings.forEachIndexed { i, w ->
+                                val tone = when {
+                                    w.word in matched -> ChoiceTone.Correct
+                                    wrong?.second == i -> ChoiceTone.Wrong
+                                    right == i -> ChoiceTone.Selected
+                                    else -> ChoiceTone.Idle
+                                }
+                                DuoChoice(w.meaning ?: "", tone) { if (wrong == null) { right = if (right == i) null else i; check() } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 中译英：看中文释义，输入英文单词。每题只答一次，答对一题 1 XP */
+@Composable
+fun SpellScreen(r: Repo, level: Int, onExit: () -> Unit) {
+    val words by produceState<List<Word>?>(null) {
+        value = withContext(Dispatchers.IO) { r.words.randomWords(level, SPELL_QUESTIONS) }
+    }
+    var index by remember { mutableIntStateOf(0) }
+    var correct by remember { mutableIntStateOf(0) }
+    var input by remember(index) { mutableStateOf("") }
+    var ok by remember(index) { mutableStateOf<Boolean?>(null) }   // 不为空就是已经检查过
+    val all = words
+    val over = all != null && index >= all.size
+    LaunchedEffect(over) { if (over && correct > 0) r.user.addXp(today(), correct) }
+    val focus = remember { FocusRequester() }
+    Scaffold(
+        containerColor = DuoWhite,
+        contentWindowInsets = ZeroInsets,
+        topBar = { TopBar(onExit, closeAsX = true, all?.let { index.toFloat() / it.size.coerceAtLeast(1) }) },
+    ) { pad ->
+        when {
+            all == null -> Loading(pad)
+            over -> Result(pad, "翻译完成！", correct, "答对 $correct / ${all.size}", onExit)
+            else -> {
+                val w = all[index]
+                val check = { if (ok == null && input.isNotBlank()) { ok = spelledRight(input, w.word); if (ok == true) correct++ } }
+                LaunchedEffect(index) { focus.requestFocus() }
+                Column(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().imePadding()) {
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Prompt("写出这个意思的英文单词")
+                        Text(w.meaning ?: "", color = DuoEel, fontWeight = FontWeight.Black, fontSize = 24.sp, lineHeight = 32.sp)
+                        // 一个中文意思可能对应好几个词，给出首字母和长度，答案才唯一
+                        Text("提示：以 ${w.word.first()} 开头，共 ${w.word.length} 个字母", color = DuoWolf, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { if (ok == null) input = it },
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                            singleLine = true,
+                            placeholder = { Text("输入英文", color = DuoHare, fontWeight = FontWeight.Bold) },
+                            textStyle = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = DuoEel),
+                            shape = RoundedCornerShape(16.dp),
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
+                                keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { check() }),
+                        )
+                    }
+                    val result = ok
+                    if (result == null) {
+                        Box(Modifier.padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 12.dp).navigationBarsPadding()) {
+                            DuoButton("检查", check, enabled = input.isNotBlank())
+                        }
+                    } else {
+                        FeedbackBar(
+                            ok = result,
+                            title = if (result) "太棒了！" else "正确答案",
+                            detail = if (result) null else w.word,
+                            button = if (result) "继续" else "知道了",
+                            onClick = { index++ },
+                        )
                     }
                 }
             }

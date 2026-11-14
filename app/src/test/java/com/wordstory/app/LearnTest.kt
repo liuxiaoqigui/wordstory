@@ -22,6 +22,14 @@ class LearnTest {
         assertEquals(0, streak(emptySet(), 10))
     }
 
+    @Test
+    fun spellingIgnoresCaseAndOuterSpaces() {
+        assert(spelledRight(" Carbon ", "carbon"))
+        assert(spelledRight("a.m.", "A.M."))
+        assert(!spelledRight("carbn", "carbon"))
+        assert(!spelledRight("", "carbon"))
+    }
+
     private fun q(word: String) = MeaningQuestion(Word(word, null, "m", null, 1, 1), listOf("a", "b"), 0)
 
     @Test

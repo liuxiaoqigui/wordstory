@@ -11,6 +11,11 @@ const val MASTERED_BOX = 6
 const val DAILY_GOAL = 20
 const val LESSON_XP = 10
 const val BLITZ_SECONDS = 60
+const val MATCH_XP = 5
+const val SPELL_QUESTIONS = 12
+
+/** 中译英的判分：不分大小写，忽略首尾空格 */
+fun spelledRight(input: String, word: String) = input.trim().equals(word, ignoreCase = true)
 
 // 下标 = 格子号：第 1 格隔 1 天复习，第 5 格隔 15 天，第 6 格算掌握，30 天后再看一眼
 private val INTERVAL_DAYS = intArrayOf(0, 1, 2, 4, 7, 15, 30)

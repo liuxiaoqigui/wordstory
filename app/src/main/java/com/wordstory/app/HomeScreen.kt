@@ -98,7 +98,7 @@ fun HomeScreen(r: Repo, st: HomeState, refresh: Int, open: (Screen) -> Unit) {
                 if (s == null || list == null) LoadingBox(pad)
                 else LessonsTab(list, s.learned, st, pad) { open(Screen.Lesson(it)) }
             }
-            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, r.prefs.getInt("blitz_best", 0), pad, onBlitz = { open(Screen.Blitz) }) { open(Screen.Review) }
+            1 -> if (s == null) LoadingBox(pad) else ReviewTab(s, r.prefs.getInt("blitz_best", 0), pad, onBlitz = { open(Screen.Blitz) }, onMatch = { open(Screen.Match) }, onSpell = { open(Screen.Spell) }) { open(Screen.Review) }
             else -> SearchTab(r.words, st, pad, onPhonetics = { open(Screen.Phonetics) }) { open(Screen.Detail(it)) }
         }
     }
@@ -554,7 +554,7 @@ private fun rememberBob(): Dp {
 }
 
 @Composable
-private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () -> Unit, onReview: () -> Unit) {
+private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () -> Unit, onMatch: () -> Unit, onSpell: () -> Unit, onReview: () -> Unit) {
     BoxWithConstraints(Modifier.padding(pad).fillMaxSize()) {
         Column(
             Modifier
@@ -604,6 +604,8 @@ private fun ReviewTab(s: Stats, blitzBest: Int, pad: PaddingValues, onBlitz: () 
                 face = DuoYellow,
                 lip = DuoYellowLip,
             )
+            DuoButton("🧩 单词配对", onClick = onMatch, modifier = Modifier.padding(top = 12.dp), face = DuoPurple, lip = DuoPurpleDark)
+            DuoButton("✍️ 中译英 · 看中文写单词", onClick = onSpell, modifier = Modifier.padding(top = 12.dp), face = DuoBlue, lip = DuoBlueDark)
         }
     }
 }
